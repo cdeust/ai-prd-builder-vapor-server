@@ -1,62 +1,96 @@
+# macOS
+.DS_Store
+*.swp
+*~.nib
+
 # Xcode
-#
-# gitignore contributors: remember to update Global/Xcode.gitignore, Objective-C.gitignore & Swift.gitignore
-
-## User settings
+build/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
 xcuserdata/
-
-## Obj-C/Swift specific
+*.xccheckout
+*.moved-aside
+DerivedData/
 *.hmap
-
-## App packaging
 *.ipa
-*.dSYM.zip
-*.dSYM
-
-## Playgrounds
-timeline.xctimeline
-playground.xcworkspace
+*.xcuserstate
+project.xcworkspace/
+.swiftpm/xcode/xcuserdata/
 
 # Swift Package Manager
-#
-# Add this line if you want to avoid checking in source code from Swift Package Manager dependencies.
-# Packages/
-# Package.pins
-# Package.resolved
-# *.xcodeproj
-#
-# Xcode automatically generates this directory with a .xcworkspacedata file and xcuserdata
-# hence it is not needed unless you have added a package configuration file to your project
-# .swiftpm
-
 .build/
+.swiftpm/
+Package.resolved
+/*.xcodeproj
 
-# CocoaPods
-#
-# We recommend against adding the Pods directory to your .gitignore. However
-# you should judge for yourself, the pros and cons are mentioned at:
-# https://guides.cocoapods.org/using/using-cocoapods.html#should-i-check-the-pods-directory-into-source-control
-#
-# Pods/
-#
-# Add this line if you want to avoid checking in source code from the Xcode workspace
-# *.xcworkspace
+# Vapor
+Config/secrets/
+.env
+.env.*
+!.env.example
+!.env.development
 
-# Carthage
-#
-# Add this line if you want to avoid checking in source code from Carthage dependencies.
-# Carthage/Checkouts
+# Database
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+db.sqlite
 
-Carthage/Build/
+# Logs
+*.log
+logs/
 
-# fastlane
-#
-# It is recommended to not store the screenshots in the git repo.
-# Instead, use fastlane to re-generate the screenshots whenever they are needed.
-# For more information about the recommended setup visit:
-# https://docs.fastlane.tools/best-practices/source-control/#source-control
+# Dependencies
+node_modules/
+Packages/
 
-fastlane/report.xml
-fastlane/Preview.html
-fastlane/screenshots/**/*.png
-fastlane/test_output
+# Generated files
+Public/
+Resources/Views/
+
+# IDE
+.idea/
+.vscode/
+*.sublime-*
+
+# Testing
+.coverage/
+*.lcov
+coverage.json
+
+# Docker
+docker-compose.override.yml
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# API Keys and Secrets
+*.pem
+*.key
+*.crt
+*.p12
+secrets.json
+config/secrets.json
+
+# Build artifacts
+*.o
+*.dylib
+*.a
+*.dSYM/
+
+# Python (if using any Python scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+ENV/
