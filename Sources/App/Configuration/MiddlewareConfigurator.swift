@@ -1,0 +1,48 @@
+import Vapor
+import Infrastructure
+
+/// Handles middleware configuration for the application
+public final class MiddlewareConfigurator {
+    private let app: Application
+
+    public init(app: Application) {
+        self.app = app
+    }
+
+    /// Configure all middleware for the application
+    public func configure() {
+        configureCORS()
+        configureErrorHandling()
+        configureLogging()
+        configureTimeout()
+        configureFileServing()
+    }
+
+    // MARK: - Private Methods
+
+    private func configureCORS() {
+        let corsConfiguration = CORSMiddleware.Configuration(
+            allowedOrigin: .all,
+            allowedMethods: [.GET, .POST, .PUT, .OPTIONS, .DELETE, .PATCH],
+            allowedHeaders: [.accept, .authorization, .contentType, .origin, .xRequestedWith, .userAgent, .accessControlAllowOrigin]
+        )
+        app.middleware.use(CORSMiddleware(configuration: corsConfiguration), at: .beginning)
+    }
+
+    private func configureErrorHandling() {
+        app.middleware.use(ErrorMiddleware.default(environment: app.environment))
+    }
+
+    private func configureLogging() {
+        app.middleware.use(RouteLoggingMiddleware(logLevel: .info))
+    }
+
+    private func configureTimeout() {
+        app.middleware.use(TimeoutMiddleware(timeoutSeconds: 30))
+    }
+
+    private func configureFileServing() {
+        // Serve static documentation files
+        app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
+    }
+}

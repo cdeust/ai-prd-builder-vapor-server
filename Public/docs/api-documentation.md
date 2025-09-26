@@ -2,7 +2,16 @@
 
 ## Overview
 
-The AI PRD Builder API provides endpoints for generating Product Requirements Documents (PRDs) using multiple AI providers including Anthropic Claude, OpenAI GPT, and Google Gemini. The API follows RESTful principles and supports real-time updates via WebSockets.
+The AI PRD Builder API provides endpoints for generating Product Requirements Documents (PRDs) using the complete **ai-orchestrator** Swift CLI system. The API supports multiple AI providers including Apple Intelligence (on-device), Anthropic Claude, OpenAI GPT, and Google Gemini with intelligent fallback. The API follows RESTful principles and supports real-time updates via WebSockets.
+
+### Key Features
+
+- 🍎 **Apple Intelligence Integration**: Privacy-first on-device PRD generation
+- 🔄 **Multi-Provider Fallback**: Automatic failover between providers
+- 🎯 **ai-orchestrator System**: Full access to advanced reasoning and thinking frameworks
+- ⚡ **Real-time WebSocket**: Interactive clarifications and status updates
+- 🏛️ **Clean Architecture**: SOLID principles with separated controllers
+- 📊 **Flexible Database**: PostgreSQL, Supabase, or MongoDB support
 
 ## Base URL
 
@@ -44,11 +53,13 @@ The API returns structured error responses:
 
 ## Endpoints
 
-### 1. Generate PRD
+### PRD Generation
 
-Generate a comprehensive PRD from requirements.
+#### 1.1 Generate PRD
 
-**POST** `/prd/generate`
+Generate a comprehensive PRD from requirements using ai-orchestrator.
+
+**POST** `/api/v1/prd/generate`
 
 #### Request Body
 
@@ -122,11 +133,30 @@ Generate a comprehensive PRD from requirements.
 }
 ```
 
-### 2. Analyze Requirements
+#### 1.2 Generate PRD Interactively
+
+Generate PRD with interactive clarifications support.
+
+**POST** `/api/v1/prd/generate/interactive`
+
+Same request/response format as `/prd/generate` but optimized for WebSocket-based clarification flow.
+
+#### 1.3 Generate with Specific Provider
+
+Generate PRD using a specific AI provider.
+
+**POST** `/api/v1/prd/generate/provider/{providerName}`
+
+**Path Parameters:**
+- `providerName`: Provider identifier (`anthropic`, `openai`, `gemini`, `apple`)
+
+### 2. Requirements Analysis
+
+#### 2.1 Analyze Requirements
 
 Analyze requirements without generating a full PRD.
 
-**POST** `/prd/analyze`
+**POST** `/api/v1/prd/analyze`
 
 #### Request Body
 
@@ -163,11 +193,13 @@ Analyze requirements without generating a full PRD.
 }
 ```
 
-### 3. Get Generation Status
+### 3. PRD Management
+
+#### 3.1 Get Generation Status
 
 Check the status of a PRD generation request.
 
-**GET** `/prd/{request_id}/status`
+**GET** `/api/v1/prd/{requestId}/status`
 
 #### Response
 
@@ -183,11 +215,11 @@ Check the status of a PRD generation request.
 }
 ```
 
-### 4. List PRD Requests
+#### 3.2 List PRD Requests
 
 Get a paginated list of PRD requests for the current user.
 
-**GET** `/prd/requests?limit=20&offset=0`
+**GET** `/api/v1/prd/requests?limit=20&offset=0`
 
 #### Response
 
@@ -211,11 +243,11 @@ Get a paginated list of PRD requests for the current user.
 }
 ```
 
-### 5. Export PRD Document
+#### 3.3 Export PRD Document
 
 Export a generated PRD in various formats.
 
-**GET** `/prd/documents/{document_id}/export?format=markdown`
+**GET** `/api/v1/prd/documents/{documentId}/export?format=markdown`
 
 #### Query Parameters
 
@@ -225,11 +257,73 @@ Export a generated PRD in various formats.
 
 Returns the document content with appropriate content-type headers for download.
 
-### 6. WebSocket Real-time Updates
+### 4. AI Provider Management
+
+#### 4.1 Get Available Providers
+
+List all available AI providers and their capabilities.
+
+**GET** `/api/v1/prd/providers`
+
+#### Response
+
+```json
+{
+  "providers": [
+    {
+      "name": "apple",
+      "isAvailable": true,
+      "priority": 200,
+      "capabilities": ["text-generation", "on-device", "privacy-first"],
+      "lastUsed": null
+    },
+    {
+      "name": "anthropic",
+      "isAvailable": true,
+      "priority": 100,
+      "capabilities": ["text-generation", "analysis", "long-context"],
+      "lastUsed": "2025-01-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+#### 4.2 Get Provider Status
+
+Get health and performance metrics for all providers.
+
+**GET** `/api/v1/prd/providers/status`
+
+#### Response
+
+```json
+{
+  "providers": {
+    "apple": {
+      "isHealthy": true,
+      "lastChecked": "2025-01-15T10:35:00Z",
+      "failureCount": 0,
+      "avgResponseTime": 0.8
+    },
+    "anthropic": {
+      "isHealthy": true,
+      "lastChecked": "2025-01-15T10:35:00Z",
+      "failureCount": 0,
+      "avgResponseTime": 2.3
+    }
+  }
+}
+```
+
+### 5. WebSocket Real-time Updates
+
+#### 5.1 Status Updates WebSocket
 
 Connect to WebSocket for real-time generation updates.
 
-**WebSocket** `/prd/ws/{request_id}`
+**WebSocket** `/api/v1/prd/ws/{requestId}`
+
+Connects to receive real-time status updates for a specific PRD generation request.
 
 #### Messages
 
@@ -257,11 +351,45 @@ Connect to WebSocket for real-time generation updates.
 **Clarification Response (Client → Server):**
 ```json
 {
-  "type": "clarification_response",
+  "type": "clarification_answers",
   "answers": [
     "Support admin, manager, and regular user roles",
     "Minimum 8 characters with uppercase, lowercase, numbers, and symbols"
   ]
+}
+```
+
+#### 5.2 Interactive Generation WebSocket
+
+**WebSocket** `/api/v1/prd/ws/interactive/{requestId}`
+
+Connects for interactive PRD generation with bidirectional communication.
+
+**Start Generation (Client → Server):**
+```json
+{
+  "type": "start_generation",
+  "generateCommand": {
+    "requestId": "123e4567-e89b-12d3-a456-426614174000",
+    "title": "Feature Title",
+    "description": "Feature description...",
+    "mockupSources": [],
+    "priority": "high"
+  }
+}
+```
+
+**Generation Complete (Server → Client):**
+```json
+{
+  "type": "generation_complete",
+  "result": {
+    "id": "456e7890-e89b-12d3-a456-426614174001",
+    "title": "Generated PRD",
+    "content": "# Executive Summary\n...",
+    "sections": [...],
+    "confidence": 0.92
+  }
 }
 ```
 
@@ -316,13 +444,17 @@ Enum values:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `DATABASE_TYPE` | Database type (`postgresql`, `supabase`, `mongodb`) | `postgresql` |
 | `DATABASE_URL` | PostgreSQL connection string | - |
-| `ANTHROPIC_API_KEY` | Anthropic API key | - |
-| `OPENAI_API_KEY` | OpenAI API key | - |
-| `GEMINI_API_KEY` | Google Gemini API key | - |
-| `REDIS_URL` | Redis connection string | - |
+| `SUPABASE_URL` | Supabase project URL | - |
+| `SUPABASE_ANON_KEY` | Supabase anonymous key | - |
+| `MONGODB_CONNECTION_STRING` | MongoDB connection string | - |
+| `MONGODB_DATABASE` | MongoDB database name | `ai_prd_builder` |
+| `ANTHROPIC_API_KEY` | Anthropic API key (fallback) | - |
+| `OPENAI_API_KEY` | OpenAI API key (optional) | - |
+| `GEMINI_API_KEY` | Google Gemini API key (optional) | - |
+| `SKIP_DATABASE` | Skip database setup for testing | `false` |
 | `PORT` | Server port | 8080 |
-| `HOST` | Server hostname | 0.0.0.0 |
 
 ## Health Check
 
@@ -390,8 +522,13 @@ For API support, please:
 ## Changelog
 
 ### v1.0.0 (Current)
-- Initial API release
-- Anthropic Claude integration
-- Basic PRD generation and analysis
-- WebSocket support for real-time updates
-- Export functionality for multiple formats
+- ✅ ai-orchestrator Swift CLI system integration
+- ✅ Apple Intelligence (on-device) support
+- ✅ Multi-provider fallback (Anthropic, OpenAI, Gemini)
+- ✅ Clean Architecture with SOLID principles
+- ✅ Split controllers (Generation, Management, Provider, WebSocket)
+- ✅ WebSocket support for real-time updates and interactive clarifications
+- ✅ Multiple database support (PostgreSQL, Supabase, MongoDB)
+- ✅ Export functionality for multiple formats
+- ✅ Comprehensive error handling with DomainErrorMiddleware
+- ✅ Async/await throughout with modern Swift concurrency

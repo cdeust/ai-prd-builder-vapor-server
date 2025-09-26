@@ -1,8 +1,6 @@
 import Foundation
 
-/// Domain entity representing a PRD generation request
-/// This is a pure domain object with no framework dependencies
-public struct PRDRequest {
+public struct PRDRequest: Sendable {
     public let id: UUID
     public let title: String
     public let description: String
@@ -35,73 +33,6 @@ public struct PRDRequest {
         self.status = status
     }
 }
-
-// MARK: - Supporting Types
-
-public struct Requester {
-    public let id: String
-    public let email: String?
-    public let organizationId: String?
-
-    public init(id: String, email: String? = nil, organizationId: String? = nil) {
-        self.id = id
-        self.email = email
-        self.organizationId = organizationId
-    }
-}
-
-public struct RequestMetadata {
-    public let tags: [String]
-    public let projectId: String?
-    public let version: String?
-    public let customFields: [String: String]
-
-    public init(
-        tags: [String] = [],
-        projectId: String? = nil,
-        version: String? = nil,
-        customFields: [String: String] = [:]
-    ) {
-        self.tags = tags
-        self.projectId = projectId
-        self.version = version
-        self.customFields = customFields
-    }
-}
-
-public enum RequestStatus: Equatable {
-    case pending
-    case processing
-    case clarificationNeeded
-    case completed
-    case failed(reason: String)
-    case cancelled
-
-    public var rawValue: String {
-        switch self {
-        case .pending: return "pending"
-        case .processing: return "processing"
-        case .clarificationNeeded: return "clarificationNeeded"
-        case .completed: return "completed"
-        case .failed: return "failed"
-        case .cancelled: return "cancelled"
-        }
-    }
-
-    public static func from(rawValue: String) -> RequestStatus {
-        switch rawValue {
-        case "pending": return .pending
-        case "processing": return .processing
-        case "clarificationNeeded": return .clarificationNeeded
-        case "completed": return .completed
-        case "failed": return .failed(reason: "")
-        case "cancelled": return .cancelled
-        default: return .pending
-        }
-    }
-}
-
-// MARK: - Domain Logic
 
 extension PRDRequest {
     /// Business rule: High priority requests must have a description

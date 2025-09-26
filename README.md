@@ -127,39 +127,48 @@ vapor-server/
 │   │   │   ├── MockupSource.swift
 │   │   │   ├── Confidence.swift
 │   │   │   └── Priority.swift
-│   │   ├── Repositories/          # Protocol Definitions
+│   │   ├── Ports/                 # Protocol Definitions
 │   │   │   ├── PRDRepositoryProtocol.swift
-│   │   │   └── CacheRepositoryProtocol.swift
+│   │   │   ├── PRDDocumentRepositoryProtocol.swift
+│   │   │   └── AIProviderPort.swift
 │   │   ├── Services/              # Domain Services
 │   │   │   └── PRDValidationService.swift
 │   │   └── Errors/
 │   │       └── DomainError.swift
 │   │
 │   ├── Application/               # Use Cases & Application Services
-│   │   ├── UseCases/
-│   │   │   ├── GeneratePRDUseCase.swift
-│   │   │   ├── AnalyzeRequirementsUseCase.swift
-│   │   │   └── GetPRDUseCase.swift
-│   │   ├── Ports/                # Interfaces for External Services
-│   │   │   ├── AIProviderPort.swift
-│   │   │   ├── NotificationPort.swift
-│   │   │   └── StoragePort.swift
 │   │   ├── Services/
-│   │   │   ├── PRDApplicationService.swift
-│   │   │   └── ProviderSelectionService.swift
-│   │   └── DTOs/                 # Data Transfer Objects
+│   │   │   ├── PRDApplicationService.swift  # Main application service
+│   │   │   ├── PRDWorkflowService.swift     # Workflow orchestration
+│   │   │   ├── PRDStatusService.swift       # Status management
+│   │   │   ├── PRDExportService.swift       # Export functionality
+│   │   │   ├── DocumentFormatter.swift      # Document formatting
+│   │   │   └── ProgressCalculator.swift     # Progress calculation
+│   │   └── Models/               # Application layer DTOs
 │   │       ├── GeneratePRDCommand.swift
-│   │       └── PRDResult.swift
+│   │       ├── PRDGenerationResponse.swift
+│   │       ├── GenerationStatus.swift
+│   │       └── ExportResult.swift
 │   │
 │   ├── Infrastructure/           # External Concerns & Implementations
 │   │   ├── Repositories/
-│   │   │   ├── PostgresPRDRepository.swift
-│   │   │   └── RedisCacheRepository.swift
-│   │   ├── Providers/           # AI Provider Implementations
-│   │   │   ├── AnthropicProvider.swift
-│   │   │   ├── OpenAIProvider.swift
-│   │   │   ├── GeminiProvider.swift
-│   │   │   └── AppleIntelligenceProvider.swift
+│   │   │   ├── Vapor/           # PostgreSQL/Fluent Implementation
+│   │   │   │   ├── VaporPRDRepository.swift
+│   │   │   │   ├── VaporPRDDocumentRepository.swift
+│   │   │   │   ├── Models/
+│   │   │   │   └── Migrations/
+│   │   │   ├── Supabase/        # Supabase REST API Implementation
+│   │   │   │   ├── SupabasePRDRepository.swift
+│   │   │   │   ├── SupabasePRDDocumentRepository.swift
+│   │   │   │   └── Models/
+│   │   │   ├── MongoDB/         # MongoDB Implementation
+│   │   │   │   ├── MongoDBPRDRepository.swift
+│   │   │   │   ├── MongoDBPRDDocumentRepository.swift
+│   │   │   │   └── Models/
+│   │   │   ├── InMemoryPRDRepository.swift
+│   │   │   └── InMemoryPRDDocumentRepository.swift
+│   │   ├── AIProviders/         # AI Provider Implementations
+│   │   │   └── AIOrchestratorProvider.swift  # ai-orchestrator integration
 │   │   ├── Services/
 │   │   │   ├── S3StorageService.swift
 │   │   │   └── EmailNotificationService.swift
@@ -172,30 +181,43 @@ vapor-server/
 │   │
 │   ├── Presentation/            # Web Layer
 │   │   ├── Controllers/
-│   │   │   ├── PRDController.swift
-│   │   │   ├── HealthController.swift
-│   │   │   └── ProviderController.swift
-│   │   ├── Middleware/
-│   │   │   ├── AuthenticationMiddleware.swift
-│   │   │   ├── RateLimitMiddleware.swift
-│   │   │   └── LoggingMiddleware.swift
-│   │   ├── Models/              # Request/Response Models
-│   │   │   ├── Requests/
-│   │   │   │   ├── GeneratePRDRequest.swift
-│   │   │   │   └── AnalyzeRequest.swift
-│   │   │   └── Responses/
-│   │   │       ├── PRDResponse.swift
-│   │   │       └── ErrorResponse.swift
-│   │   ├── Validators/
-│   │   │   └── RequestValidator.swift
-│   │   └── Mappers/            # DTO to Model Mappers
-│   │       └── PRDMapper.swift
+│   │   │   ├── PRDGenerationController.swift  # PRD generation endpoints
+│   │   │   ├── PRDManagementController.swift  # PRD management endpoints
+│   │   │   ├── ProviderController.swift       # AI provider endpoints
+│   │   │   └── PRDWebSocketController.swift   # WebSocket handlers
+│   │   ├── Controllers/Helpers/
+│   │   │   └── PRDControllerDTOMapper.swift   # DTO mapping utilities
+│   │   ├── Controllers/WebSocket/
+│   │   │   └── WebSocketStateHandler.swift    # WebSocket state management
+│   │   ├── DTOs/                # Request/Response DTOs
+│   │   │   ├── GeneratePRDRequestDTO.swift
+│   │   │   ├── PRDGenerationResponseDTO.swift
+│   │   │   ├── AnalyzeRequirementsRequestDTO.swift
+│   │   │   ├── GenerationStatusResponseDTO.swift
+│   │   │   ├── InteractiveMessage.swift
+│   │   │   ├── ErrorResponseDTO.swift
+│   │   │   ├── PRDDocumentDTO.swift
+│   │   │   └── ProviderHealthResponseDTO.swift
 │   │
 │   ├── App/                    # Application Bootstrap
-│   │   ├── configure.swift    # DI Container Setup
-│   │   ├── routes.swift       # Route Registration
-│   │   ├── boot.swift         # App Initialization
-│   │   └── DIContainer.swift  # Dependency Injection Container
+│   │   ├── configure.swift    # Main configuration entry point
+│   │   ├── Configuration/
+│   │   │   ├── ServerConfigurator.swift   # Server setup
+│   │   │   ├── DatabaseConfigurator.swift # Database configuration
+│   │   │   ├── RouteConfigurator.swift    # Route registration
+│   │   │   ├── MiddlewareConfigurator.swift # Middleware setup
+│   │   │   └── ContentConfigurator.swift  # Content configuration
+│   │   ├── Container/
+│   │   │   ├── DIContainer.swift          # Dependency injection
+│   │   │   ├── AIProviderFactory.swift    # AI provider factory
+│   │   │   ├── DatabaseRepositoryFactory.swift # Repository factory
+│   │   │   └── VaporExtensions.swift      # Vapor DI extensions
+│   │   ├── Middleware/
+│   │   │   ├── DomainErrorMiddleware.swift # Error handling
+│   │   │   ├── RouteLoggingMiddleware.swift # Request logging
+│   │   │   └── TimeoutMiddleware.swift    # Request timeouts
+│   │   └── Models/
+│   │       └── HealthResponse.swift       # Health check response
 │   │
 │   └── Run/
 │       └── main.swift
@@ -221,43 +243,81 @@ Infrastructure ←────────────────┘
 
 ## Key Design Patterns
 
-1. **Repository Pattern**: Abstract data access
-2. **Use Case Pattern**: Encapsulate business logic
-3. **Factory Pattern**: Create AI providers
-4. **Strategy Pattern**: Select providers dynamically
-5. **Adapter Pattern**: Adapt external APIs to our ports
-6. **Dependency Injection**: Wire dependencies
-7. **Chain of Responsibility**: Provider fallback chain
+1. **Clean Architecture**: Separation of concerns with Domain, Application, Infrastructure, Presentation layers
+2. **SOLID Principles**: Single Responsibility with focused controllers and services
+3. **Repository Pattern**: Abstract data access with multiple implementations (PostgreSQL, Supabase, MongoDB)
+4. **Factory Pattern**: Create AI providers and database repositories dynamically
+5. **Strategy Pattern**: Select providers based on availability and configuration
+6. **Adapter Pattern**: Adapt ai-orchestrator CLI system to web API
+7. **Dependency Injection**: Wire dependencies through DIContainer
+8. **DTO Pattern**: Separate domain models from API models for boundary protection
 
 ## API Endpoints
 
-- `POST /api/v1/prd/generate` - Generate PRD
-- `POST /api/v1/prd/analyze` - Analyze requirements
-- `GET /api/v1/prd/{id}` - Get PRD by ID
-- `GET /api/v1/providers` - List available providers
-- `GET /health` - Health check
-- `GET /metrics` - Prometheus metrics
+### PRD Generation (PRDGenerationController)
+- `POST /api/v1/prd/generate` - Generate PRD with automatic analysis
+- `POST /api/v1/prd/generate/interactive` - Generate PRD with interactive clarifications
+- `POST /api/v1/prd/generate/provider/:providerName` - Generate PRD with specific provider
+- `POST /api/v1/prd/analyze` - Analyze requirements without generating
+
+### PRD Management (PRDManagementController)
+- `GET /api/v1/prd/:requestId/status` - Get generation status
+- `GET /api/v1/prd/requests` - List all PRD requests (paginated)
+- `GET /api/v1/prd/documents/:documentId/export` - Export PRD document (markdown, html, pdf, docx, json)
+
+### AI Provider Management (ProviderController)
+- `GET /api/v1/prd/providers` - List available AI providers
+- `GET /api/v1/prd/providers/status` - Get provider health status
+
+### WebSocket Real-time (PRDWebSocketController)
+- `WS /api/v1/prd/ws/:requestId` - Status updates for a PRD generation
+- `WS /api/v1/prd/ws/interactive/:requestId` - Interactive generation with clarifications
+
+### Health
+- `GET /health` - Server health check
+
+See complete API documentation at `/Public/docs/api-documentation.md`
 
 ## Environment Variables
 
 ```env
-# Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/prd_db
-REDIS_URL=redis://localhost:6379
+# Database Configuration
+DATABASE_TYPE=postgresql              # postgresql, supabase, or mongodb
+DATABASE_URL=postgres://vapor:password@localhost:5432/ai_prd_builder
+DATABASE_HOST=localhost               # PostgreSQL host
+DATABASE_PORT=5432                    # PostgreSQL port
+DATABASE_USERNAME=vapor               # PostgreSQL username
+DATABASE_PASSWORD=password            # PostgreSQL password
+DATABASE_NAME=ai_prd_builder          # PostgreSQL database name
 
-# AI Providers
-ANTHROPIC_API_KEY=sk-...
-OPENAI_API_KEY=sk-...
-GEMINI_API_KEY=...
+# Supabase Configuration (if DATABASE_TYPE=supabase)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
 
-# Storage
+# MongoDB Configuration (if DATABASE_TYPE=mongodb)
+MONGODB_CONNECTION_STRING=mongodb://localhost:27017
+MONGODB_DATABASE=ai_prd_builder
+
+# Skip Database (for testing)
+SKIP_DATABASE=false                   # Set to true to skip database setup
+
+# AI Provider Keys (ai-orchestrator system)
+ANTHROPIC_API_KEY=sk-ant-api03-...    # Primary fallback provider (recommended)
+OPENAI_API_KEY=sk-...                 # Optional fallback
+GEMINI_API_KEY=...                    # Optional fallback
+
+# Privacy & Provider Configuration
+MAX_PRIVACY_LEVEL=onDevice            # onDevice, privateCloud, or external
+PREFERRED_PROVIDER=apple              # apple, anthropic, openai, or gemini
+ENABLE_CLARIFICATIONS=true            # Enable interactive clarification prompts
+
+# Server Configuration
+PORT=8080
+APP_VERSION=1.0.0
+DEBUG_MODE=false                      # Enable debug logging
+
+# Optional: Storage & Notifications
 S3_BUCKET=prd-storage
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
-
-# App Config
-PORT=8080
-ENVIRONMENT=development
-LOG_LEVEL=info
-RATE_LIMIT=100
 ```

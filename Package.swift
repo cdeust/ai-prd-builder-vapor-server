@@ -34,7 +34,6 @@ let package = Package(
         // AI Provider SDKs (when available)
         // .package(url: "https://github.com/anthropics/anthropic-sdk-swift.git", from: "1.0.0"),
 
-        // Internal PRD Generator Package - Full ai-orchestrator system
         .package(path: "../ai-prd-builder/swift"),
 
         // Testing
@@ -65,16 +64,9 @@ let package = Package(
                 .product(name: "AsyncHTTPClient", package: "async-http-client"),
                 .product(name: "MongoSwift", package: "mongo-swift-driver"),
                 .product(name: "Redis", package: "redis"),
-                // Complete ai-orchestrator system integration
-                .product(name: "PRDGenerator", package: "swift"),
                 .product(name: "CommonModels", package: "swift"),
                 .product(name: "DomainCore", package: "swift"),
-                .product(name: "Orchestration", package: "swift"),
-                .product(name: "AIProvidersCore", package: "swift"),
-                .product(name: "AIProviderImplementations", package: "swift"),
-                .product(name: "ThinkingCore", package: "swift"),
-                .product(name: "ImplementationAnalysis", package: "swift"),
-                .product(name: "SessionManagement", package: "swift")
+                .product(name: "Orchestration", package: "swift")
             ]
         ),
 
