@@ -5,11 +5,12 @@ import Domain
 public final class SupabasePRDRepository: PRDRepositoryProtocol {
     private let httpClient: SupabaseHTTPClient
     private let requestBuilder: SupabaseRequestBuilder
-    private let tableName = "prd_requests"
+    private let tableName: String
 
-    public init(httpClient: HTTPClient, supabaseURL: String, apiKey: String) {
+    public init(httpClient: HTTPClient, supabaseURL: String, apiKey: String, schema: String = "public") {
         self.httpClient = SupabaseHTTPClient(httpClient: httpClient, supabaseURL: supabaseURL, apiKey: apiKey)
         self.requestBuilder = SupabaseRequestBuilder(supabaseURL: supabaseURL, apiKey: apiKey)
+        self.tableName = schema == "public" ? "prd_requests" : "\(schema).prd_requests"
     }
 
     public func save(_ request: PRDRequest) async throws -> PRDRequest {

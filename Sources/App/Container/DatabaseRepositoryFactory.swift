@@ -57,19 +57,34 @@ public final class DatabaseRepositoryFactory {
             throw ConfigurationError.invalidConfiguration("Missing SUPABASE_URL or SUPABASE_ANON_KEY")
         }
 
+        let environment = app.environment.name
+        let schema: String
+        switch environment {
+        case "development":
+            schema = "development"
+        case "testing":
+            schema = "testing"
+        case "production":
+            schema = "production"
+        default:
+            schema = "development"
+        }
+
         let prdRepository = SupabasePRDRepository(
             httpClient: httpClient,
             supabaseURL: supabaseURL,
-            apiKey: supabaseKey
+            apiKey: supabaseKey,
+            schema: schema
         )
 
         let documentRepository = SupabasePRDDocumentRepository(
             httpClient: httpClient,
             supabaseURL: supabaseURL,
-            apiKey: supabaseKey
+            apiKey: supabaseKey,
+            schema: schema
         )
 
-        app.logger.info("✅ Supabase repositories registered")
+        app.logger.info("✅ Supabase repositories registered (schema: \(schema))")
         return (prdRepository, documentRepository)
     }
 

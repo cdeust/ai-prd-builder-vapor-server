@@ -21,8 +21,17 @@ public final class DatabaseConfigurator {
             return
         }
 
-        try configureConnection()
-        try configureMigrations()
+        // Check database type
+        let databaseType = Environment.get("DATABASE_TYPE") ?? "postgresql"
+
+        // Only configure Fluent/PostgreSQL for postgresql type
+        // Supabase and MongoDB use their own clients via repositories
+        if databaseType == "postgresql" {
+            try configureConnection()
+            try configureMigrations()
+        } else {
+            app.logger.info("ℹ️ Database type: \(databaseType) - using repository-based connection")
+        }
     }
 
     // MARK: - Private Methods

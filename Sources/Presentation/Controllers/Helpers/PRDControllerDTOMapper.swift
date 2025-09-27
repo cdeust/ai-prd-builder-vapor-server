@@ -4,6 +4,14 @@ import Application
 
 struct PRDControllerDTOMapper {
     static func buildGenerateCommand(from dto: GeneratePRDRequestDTO) -> GeneratePRDCommand {
+        let requester = dto.requester.map { requesterDTO in
+            RequesterInfo(
+                id: requesterDTO.id,
+                name: requesterDTO.name,
+                email: requesterDTO.email
+            )
+        }
+
         return GeneratePRDCommand(
             requestId: dto.requestId ?? UUID(),
             title: dto.title,
@@ -18,6 +26,7 @@ struct PRDControllerDTOMapper {
                 )
             } ?? [],
             priority: Priority(rawValue: dto.priority) ?? .medium,
+            requester: requester,
             preferredProvider: dto.preferredProvider,
             options: GenerationOptions(
                 includeTestCases: dto.options?.includeTestCases ?? true,

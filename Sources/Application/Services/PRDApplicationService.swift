@@ -18,7 +18,8 @@ public final class PRDApplicationService {
     ) {
         self.workflowService = PRDWorkflowService(
             generatePRDUseCase: generatePRDUseCase,
-            analyzeRequirementsUseCase: analyzeRequirementsUseCase
+            analyzeRequirementsUseCase: analyzeRequirementsUseCase,
+            prdRepository: prdRepository
         )
 
         self.statusService = PRDStatusService(

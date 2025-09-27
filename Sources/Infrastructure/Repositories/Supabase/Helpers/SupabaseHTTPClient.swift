@@ -15,15 +15,20 @@ struct SupabaseHTTPClient {
     }
 
     func execute<T: Decodable>(_ request: HTTPClientRequest) async throws -> T {
+        print("[SupabaseHTTPClient] Executing request: \(request.method) \(request.url)")
         let response = try await httpClient.execute(request, timeout: .seconds(30))
+        print("[SupabaseHTTPClient] Response status: \(response.status.code)")
 
         guard response.status.code >= 200 && response.status.code < 300 else {
             let errorBody = try await response.body.collect(upTo: 1024 * 1024)
             let errorMessage = String(buffer: errorBody)
+            print("[SupabaseHTTPClient] Error response: \(errorMessage)")
             throw DomainError.processingFailed("Supabase error: \(response.status) - \(errorMessage)")
         }
 
         let responseBody = try await response.body.collect(upTo: 10 * 1024 * 1024)
+        let responseString = String(buffer: responseBody)
+        print("[SupabaseHTTPClient] Response body: \(responseString)")
         return try JSONDecoder().decode(T.self, from: responseBody)
     }
 
