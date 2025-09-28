@@ -9,8 +9,8 @@ public final class SupabasePRDRepository: PRDRepositoryProtocol {
 
     public init(httpClient: HTTPClient, supabaseURL: String, apiKey: String, schema: String = "public") {
         self.httpClient = SupabaseHTTPClient(httpClient: httpClient, supabaseURL: supabaseURL, apiKey: apiKey)
-        self.requestBuilder = SupabaseRequestBuilder(supabaseURL: supabaseURL, apiKey: apiKey)
-        self.tableName = schema == "public" ? "prd_requests" : "\(schema).prd_requests"
+        self.requestBuilder = SupabaseRequestBuilder(supabaseURL: supabaseURL, apiKey: apiKey, schema: schema)
+        self.tableName = "prd_requests"
     }
 
     public func save(_ request: PRDRequest) async throws -> PRDRequest {

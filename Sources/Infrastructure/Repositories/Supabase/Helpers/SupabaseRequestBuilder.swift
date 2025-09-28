@@ -5,10 +5,12 @@ import Domain
 struct SupabaseRequestBuilder {
     private let supabaseURL: String
     private let apiKey: String
+    private let schema: String
 
-    init(supabaseURL: String, apiKey: String) {
+    init(supabaseURL: String, apiKey: String, schema: String = "public") {
         self.supabaseURL = supabaseURL.hasSuffix("/") ? String(supabaseURL.dropLast()) : supabaseURL
         self.apiKey = apiKey
+        self.schema = schema
     }
 
     func buildInsertRequest<T: Encodable>(tableName: String, model: T) throws -> HTTPClientRequest {
@@ -75,11 +77,13 @@ struct SupabaseRequestBuilder {
 
     private func addCommonHeaders(to request: inout HTTPClientRequest) {
         request.headers.add(name: "Content-Type", value: "application/json")
+        request.headers.add(name: "Content-Profile", value: schema)
         addAuthHeaders(to: &request)
     }
 
     private func addAuthHeaders(to request: inout HTTPClientRequest) {
         request.headers.add(name: "apikey", value: apiKey)
         request.headers.add(name: "Authorization", value: "Bearer \(apiKey)")
+        request.headers.add(name: "Accept-Profile", value: schema)
     }
 }

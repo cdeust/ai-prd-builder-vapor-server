@@ -16,19 +16,44 @@ public final class AIProviderFactory {
 
     /// Create AI provider based on configuration
     public func createProvider() throws -> AIProviderPort {
-        // Primary: AI Orchestrator Provider (uses complete Swift CLI system)
-        if let orchestratorProvider = createAIOrchestratorProvider() {
-            return orchestratorProvider
+        let providerType = Environment.get("AI_PROVIDER")?.lowercased() ?? "native"
+
+        switch providerType {
+        case "native", "prd-generator":
+            // Use the native PRD generator from ai-prd-builder package
+            app.logger.info("🚀 Native PRD Generator provider configured")
+            return NativePRDGeneratorProvider()
+
+        case "ai-orchestrator", "orchestrator":
+            // Use AI Orchestrator Provider (uses complete Swift CLI system)
+            if let orchestratorProvider = createAIOrchestratorProvider() {
+                return orchestratorProvider
+            }
+
+        case "anthropic", "claude":
+            // Use direct Anthropic provider
+            if let anthropicProvider = createAnthropicProvider() {
+                app.logger.info("🤖 Direct Anthropic provider registered")
+                return anthropicProvider
+            }
+
+        default:
+            app.logger.warning("⚠️ Unknown AI_PROVIDER: \(providerType), falling back to native")
+            return NativePRDGeneratorProvider()
         }
 
-        // Fallback: Direct Anthropic provider only if AI Orchestrator fails
+        // Fallback chain
+        if let nativeProvider = createNativePRDProvider() {
+            return nativeProvider
+        }
+
         if let anthropicProvider = createAnthropicProvider() {
-            app.logger.info("🤖 Fallback: Direct Anthropic provider registered (AI Orchestrator unavailable)")
+            app.logger.info("🤖 Fallback: Direct Anthropic provider registered")
             return anthropicProvider
         }
 
         // No providers available
-        app.logger.error("❌ No AI providers available. Ensure ai-orchestrator system is properly configured or set ANTHROPIC_API_KEY.")
+        app.logger.error("❌ No AI providers available")
         throw ConfigurationError.missingAIProvider
     }
 
@@ -46,6 +71,10 @@ public final class AIProviderFactory {
     }
 
     // MARK: - Private Methods
+
+    private func createNativePRDProvider() -> NativePRDGeneratorProvider? {
+        return NativePRDGeneratorProvider()
+    }
 
     private func createAnthropicProvider() -> AnthropicProvider? {
         guard let anthropicKey = Environment.get("ANTHROPIC_API_KEY"), !anthropicKey.isEmpty else {

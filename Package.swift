@@ -66,7 +66,10 @@ let package = Package(
                 .product(name: "Redis", package: "redis"),
                 .product(name: "CommonModels", package: "swift"),
                 .product(name: "DomainCore", package: "swift"),
-                .product(name: "Orchestration", package: "swift")
+                .product(name: "Orchestration", package: "swift"),
+                .product(name: "PRDGenerator", package: "swift"),
+                .product(name: "AIProvidersCore", package: "swift"),
+                .product(name: "ThinkingCore", package: "swift")
             ]
         ),
 

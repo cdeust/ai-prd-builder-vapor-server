@@ -88,25 +88,18 @@ public final class AIOrchestratorProvider: AIProviderPort, @unchecked Sendable {
 
     public func generatePRDWithClarifications(
         from request: GeneratePRDCommand,
-        clarificationHandler: @escaping ([String]) async throws -> [String]
+        clarificationHandler: @escaping ([String]) async throws -> [String],
+        progressHandler: (@Sendable (String) async -> Void)? = nil,
+        sectionHandler: (@Sendable (String, String, Int) async -> Void)? = nil
     ) async throws -> PRDGenerationResult {
         let startTime = Date()
 
-        let initialPrompt = inputBuilder.buildInteractivePrompt(from: request)
-        let (initialResponse, _) = try await orchestrator.chat(message: initialPrompt)
-        var response = initialResponse
-
-        if configuration.enableClarificationPrompts {
-            let questions = responseParser.extractQuestions(from: response)
-            if !questions.isEmpty {
-                let answers = try await clarificationHandler(questions)
-                let answersPrompt = inputBuilder.buildAnswersPrompt(questions: questions, answers: answers)
-                let (finalResponse, _) = try await orchestrator.chat(message: answersPrompt)
-                response = finalResponse
-            }
-        }
-
-        let generator = try await getOrCreatePRDGenerator(preferredProvider: request.preferredProvider)
+        let generator = try await getOrCreatePRDGenerator(
+            preferredProvider: request.preferredProvider,
+            progressHandler: progressHandler,
+            sectionHandler: sectionHandler,
+            clarificationHandler: clarificationHandler
+        )
         let prdInput = try inputBuilder.build(from: request)
         let prdDocument = try await generator.generatePRD(from: prdInput)
         let processingTime = Date().timeIntervalSince(startTime)
@@ -166,11 +159,12 @@ public final class AIOrchestratorProvider: AIProviderPort, @unchecked Sendable {
         )
     }
 
-    private func getOrCreatePRDGenerator(preferredProvider: String? = nil) async throws -> PRDGenerator {
-        if let existingGenerator = prdGenerator {
-            return existingGenerator
-        }
-
+    private func getOrCreatePRDGenerator(
+        preferredProvider: String? = nil,
+        progressHandler: (@Sendable (String) async -> Void)? = nil,
+        sectionHandler: (@Sendable (String, String, Int) async -> Void)? = nil,
+        clarificationHandler: (([String]) async throws -> [String])? = nil
+    ) async throws -> PRDGenerator {
         if let preferredProvider = preferredProvider {
             _ = providerCoordinator.switchProvider(to: preferredProvider)
         }
@@ -179,13 +173,33 @@ public final class AIOrchestratorProvider: AIProviderPort, @unchecked Sendable {
             throw DomainError.processingFailed("No AI provider available")
         }
 
+        let interactionHandler: UserInteractionHandler?
+
+        if let progressHandler = progressHandler, let sectionHandler = sectionHandler, let clarificationHandler = clarificationHandler {
+            print("[AIOrchestratorProvider] ✅ Creating StreamingWebSocketInteractionHandler")
+            interactionHandler = StreamingWebSocketInteractionHandler(
+                progressCallback: progressHandler,
+                sectionCallback: sectionHandler,
+                clarificationCallback: clarificationHandler
+            )
+        } else {
+            print("[AIOrchestratorProvider] ⚠️ Missing handlers - progress:\(progressHandler != nil) section:\(sectionHandler != nil) clarification:\(clarificationHandler != nil)")
+            if let progressHandler = progressHandler {
+                print("[AIOrchestratorProvider] Creating basic WebSocketInteractionHandler")
+                interactionHandler = WebSocketInteractionHandler(progressCallback: progressHandler)
+            } else {
+                print("[AIOrchestratorProvider] ❌ No handler - PRDGenerator will print to console only!")
+                interactionHandler = nil
+            }
+        }
+
+        print("[AIOrchestratorProvider] Creating PRDGenerator with handler: \(interactionHandler != nil ? "YES" : "NO")")
         let generator = PRDGenerator(
             provider: selectedProvider,
             configuration: configuration,
-            interactionHandler: nil
+            interactionHandler: interactionHandler
         )
 
-        self.prdGenerator = generator
         return generator
     }
 
@@ -213,5 +227,162 @@ public final class AIOrchestratorProvider: AIProviderPort, @unchecked Sendable {
         default:
             return .onDevice
         }
+    }
+}
+
+final class WebSocketInteractionHandler: UserInteractionHandler, @unchecked Sendable {
+    private let progressCallback: @Sendable (String) async -> Void
+
+    init(progressCallback: @escaping @Sendable (String) async -> Void) {
+        self.progressCallback = progressCallback
+    }
+
+    func askQuestion(_ question: String) async -> String {
+        return ""
+    }
+
+    func askMultipleChoice(_ question: String, options: [String]) async -> String {
+        return options.first ?? ""
+    }
+
+    func askYesNo(_ question: String) async -> Bool {
+        return true
+    }
+
+    func showInfo(_ message: String) {
+        Task { [progressCallback] in
+            await progressCallback(message)
+        }
+    }
+}
+
+final class StreamingWebSocketInteractionHandler: UserInteractionHandler, @unchecked Sendable {
+    private let progressCallback: @Sendable (String) async -> Void
+    private let sectionCallback: @Sendable (String, String, Int) async -> Void
+    private let clarificationCallback: ([String]) async throws -> [String]
+
+    private var currentSectionTitle: String?
+    private var currentSectionContent: String?
+    private var isCapturingContent = false
+    private var capturedContentLines: [String] = []
+    private var sectionOrder = 0
+
+    private let messageQueue = DispatchQueue(label: "com.prd.websocket.messages", qos: .userInitiated)
+
+    init(
+        progressCallback: @escaping @Sendable (String) async -> Void,
+        sectionCallback: @escaping @Sendable (String, String, Int) async -> Void,
+        clarificationCallback: @escaping ([String]) async throws -> [String]
+    ) {
+        self.progressCallback = progressCallback
+        self.sectionCallback = sectionCallback
+        self.clarificationCallback = clarificationCallback
+    }
+
+    func askQuestion(_ question: String) async -> String {
+        print("[StreamingHandler] ❓ Question asked: \(question)")
+
+        do {
+            let answers = try await clarificationCallback([question])
+            return answers.first ?? ""
+        } catch {
+            print("[StreamingHandler] ❌ Error getting answer: \(error)")
+            return ""
+        }
+    }
+
+    func askMultipleChoice(_ question: String, options: [String]) async -> String {
+        print("[StreamingHandler] ❓ Multiple choice question: \(question)")
+        print("[StreamingHandler] Options: \(options)")
+
+        do {
+            let answers = try await clarificationCallback([question])
+            return answers.first ?? options.first ?? ""
+        } catch {
+            print("[StreamingHandler] ❌ Error getting answer: \(error)")
+            return options.first ?? ""
+        }
+    }
+
+    func askYesNo(_ question: String) async -> Bool {
+        print("[StreamingHandler] ❓ Yes/No question: \(question)")
+
+        do {
+            let answers = try await clarificationCallback([question])
+            let answer = answers.first?.lowercased() ?? "no"
+            return answer == "yes" || answer == "y" || answer == "true"
+        } catch {
+            print("[StreamingHandler] ❌ Error getting answer: \(error)")
+            return false
+        }
+    }
+
+    func showInfo(_ message: String) {
+        print("[StreamingHandler] 📥 Received: \(message)")
+
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+
+            let group = DispatchGroup()
+            group.enter()
+
+            Task {
+                await self.handleMessage(message)
+                group.leave()
+            }
+
+            group.wait()
+            print("[StreamingHandler] ✅ Sent: \(message)")
+        }
+    }
+
+    private func handleMessage(_ message: String) async {
+        print("[StreamingHandler] 📢 Message: \(message)")
+
+        if message == "📝 SECTION_CONTENT_START" {
+            isCapturingContent = true
+            capturedContentLines = []
+            print("[StreamingHandler] 📝 Started capturing section content")
+        } else if message == "📝 SECTION_CONTENT_END" {
+            isCapturingContent = false
+            currentSectionContent = capturedContentLines.joined(separator: "\n")
+            print("[StreamingHandler] 📝 Finished capturing section content (\(capturedContentLines.count) lines)")
+            capturedContentLines = []
+        } else if isCapturingContent {
+            capturedContentLines.append(message)
+        } else if message.contains("🔄 Generating:") {
+            await sendPreviousSectionIfNeeded()
+
+            let title = message
+                .replacingOccurrences(of: "🔄 Generating:", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            currentSectionTitle = title
+            currentSectionContent = nil
+
+            print("[StreamingHandler] 🆕 Starting new section: \(title)")
+        } else if message.contains("✅") && message.contains("complete") {
+            await sendPreviousSectionIfNeeded()
+            currentSectionTitle = nil
+            currentSectionContent = nil
+        }
+
+        if !isCapturingContent {
+            await progressCallback(message)
+        }
+    }
+
+    private func sendPreviousSectionIfNeeded() async {
+        guard let title = currentSectionTitle, let content = currentSectionContent, !content.isEmpty else {
+            return
+        }
+
+        sectionOrder += 1
+
+        print("[StreamingHandler] 📄 Sending section to preview: \(title) (order: \(sectionOrder))")
+        print("[StreamingHandler] 📄 Content length: \(content.count) characters")
+        await sectionCallback(title, content, sectionOrder)
+
+        currentSectionContent = nil
     }
 }

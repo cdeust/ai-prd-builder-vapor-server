@@ -49,10 +49,16 @@ struct SupabasePRDRequestModel: Codable {
 
     func toDomainEntity() throws -> PRDRequest {
         let iso8601Formatter = ISO8601DateFormatter()
+        iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
-        guard let createdAt = iso8601Formatter.date(from: created_at),
-              let _ = iso8601Formatter.date(from: updated_at) else {
-            throw DomainError.processingFailed("Invalid date format in Supabase data")
+        guard let createdAt = iso8601Formatter.date(from: created_at) ??
+                             ISO8601DateFormatter().date(from: created_at) else {
+            throw DomainError.processingFailed("Invalid date format for created_at: \(created_at)")
+        }
+
+        guard iso8601Formatter.date(from: updated_at) != nil ||
+              ISO8601DateFormatter().date(from: updated_at) != nil else {
+            throw DomainError.processingFailed("Invalid date format for updated_at: \(updated_at)")
         }
 
         guard let mockupSourcesData = mockup_sources.data(using: .utf8) else {

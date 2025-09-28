@@ -24,7 +24,13 @@ public final class MiddlewareConfigurator {
         let corsConfiguration = CORSMiddleware.Configuration(
             allowedOrigin: .all,
             allowedMethods: [.GET, .POST, .PUT, .OPTIONS, .DELETE, .PATCH],
-            allowedHeaders: [.accept, .authorization, .contentType, .origin, .xRequestedWith, .userAgent, .accessControlAllowOrigin]
+            allowedHeaders: [
+                .accept, .authorization, .contentType, .origin,
+                .xRequestedWith, .userAgent, .accessControlAllowOrigin,
+                HTTPHeaders.Name("Upgrade"), HTTPHeaders.Name("Connection"),
+                HTTPHeaders.Name("Sec-WebSocket-Key"), HTTPHeaders.Name("Sec-WebSocket-Version"),
+                HTTPHeaders.Name("Sec-WebSocket-Extensions")
+            ]
         )
         app.middleware.use(CORSMiddleware(configuration: corsConfiguration), at: .beginning)
     }

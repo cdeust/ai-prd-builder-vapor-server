@@ -16,12 +16,11 @@ public final class DIContainer: @unchecked Sendable {
 
     public init(app: Application) {
         self.app = app
-        let httpClient = HTTPClient(eventLoopGroupProvider: .shared(app.eventLoopGroup))
-        self.databaseFactory = DatabaseRepositoryFactory(app: app, httpClient: httpClient)
-        self.aiProviderFactory = AIProviderFactory(app: app, httpClient: httpClient)
+        self.databaseFactory = DatabaseRepositoryFactory(app: app, httpClient: app.http.client.shared)
+        self.aiProviderFactory = AIProviderFactory(app: app, httpClient: app.http.client.shared)
 
         // Register HTTP client for other uses
-        register(httpClient, for: HTTPClient.self)
+        register(app.http.client.shared, for: HTTPClient.self)
     }
 
     /// Register services with the container

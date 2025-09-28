@@ -24,14 +24,21 @@ public final class PRDGenerationController: RouteCollection, @unchecked Sendable
     func generatePRD(req: Request) async throws -> PRDGenerationResponseDTO {
         let dto = try req.content.decode(GeneratePRDRequestDTO.self)
         let generateCommand = PRDControllerDTOMapper.buildGenerateCommand(from: dto)
-        let result = try await applicationService.generatePRDWithAnalysis(generateCommand)
+
+        Task.detached {
+            do {
+                _ = try await self.applicationService.generatePRDWithAnalysis(generateCommand)
+            } catch {
+                req.logger.error("PRD generation failed: \(error)")
+            }
+        }
 
         return PRDGenerationResponseDTO(
             requestId: generateCommand.requestId,
-            status: result.status.rawValue,
-            analysis: result.analysis.map(RequirementsAnalysisDTO.from),
-            document: result.document.map(PRDDocumentDTO.from),
-            message: PRDControllerDTOMapper.getStatusMessage(for: result.status)
+            status: "pending",
+            analysis: nil,
+            document: nil,
+            message: "PRD generation started. Connect to WebSocket at /api/v1/prd/ws/\(generateCommand.requestId) for real-time updates."
         )
     }
 

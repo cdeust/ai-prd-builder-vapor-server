@@ -20,23 +20,13 @@ public final class GeneratePRDUseCase {
 
     /// Execute PRD generation workflow
     public func execute(_ command: GeneratePRDCommand) async throws -> PRDDocument {
-        // 1. Create and persist PRD request
-        let requester = Requester(id: "system") // TODO: Extract from auth context
-        let request = PRDRequest(
-            id: command.requestId,
-            title: command.title,
-            description: command.description,
-            mockupSources: command.mockupSources,
-            priority: command.priority,
-            requester: requester,
-            metadata: RequestMetadata(),
-            createdAt: Date(),
-            status: .processing
-        )
+        // 1. Fetch existing request and update status to processing
+        guard var savedRequest = try await prdRepository.findById(command.requestId) else {
+            throw DomainError.notFound("PRD request not found: \(command.requestId)")
+        }
 
-        // Validate business rules
-        try request.validate()
-        let savedRequest = try await prdRepository.save(request)
+        savedRequest = savedRequest.withStatus(.processing)
+        savedRequest = try await prdRepository.update(savedRequest)
 
         // 2. Generate PRD content using AI provider
         let result = try await aiProvider.generatePRD(from: command)
@@ -67,8 +57,38 @@ public final class GeneratePRDUseCase {
         // Validate document
         try document.validate()
 
-        // 4. Save document
-        let savedDocument = try await documentRepository.save(document)
+        // 4. Save or update document
+        let existingDocument = try await documentRepository.findByRequestId(command.requestId)
+        let savedDocument: PRDDocument
+        if let existing = existingDocument {
+            let updatedDocument = PRDDocument(
+                id: existing.id,
+                requestId: savedRequest.id,
+                title: command.title,
+                content: result.content,
+                sections: result.sections.map { section in
+                    PRDSection(
+                        title: section.title,
+                        content: section.content,
+                        order: 0,
+                        sectionType: mapSectionType(section.type)
+                    )
+                },
+                metadata: DocumentMetadata(
+                    wordCount: result.content.split(separator: " ").count,
+                    estimatedReadTime: PRDDocument.estimateReadTime(
+                        wordCount: result.content.split(separator: " ").count
+                    )
+                ),
+                generatedAt: existing.generatedAt,
+                generatedBy: result.metadata.provider,
+                confidence: result.confidence,
+                version: existing.version + 1
+            )
+            savedDocument = try await documentRepository.update(updatedDocument)
+        } else {
+            savedDocument = try await documentRepository.save(document)
+        }
 
         // 5. Update request status
         let completedRequest = savedRequest.withStatus(.completed)
