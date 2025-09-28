@@ -82,7 +82,12 @@ let package = Package(
                 "Infrastructure",
                 .product(name: "Vapor", package: "vapor"),
                 .product(name: "JWT", package: "jwt"),
-                .product(name: "SwiftPrometheus", package: "swift-prometheus")
+                .product(name: "SwiftPrometheus", package: "swift-prometheus"),
+                .product(name: "PRDGenerator", package: "swift"),
+                .product(name: "CommonModels", package: "swift"),
+                .product(name: "DomainCore", package: "swift"),
+                .product(name: "AIProvidersCore", package: "swift"),
+                .product(name: "AIProviderImplementations", package: "swift")
             ]
         ),
 
@@ -96,7 +101,12 @@ let package = Package(
                 "Presentation",
                 .product(name: "Vapor", package: "vapor"),
                 .product(name: "Fluent", package: "fluent"),
-                .product(name: "FluentPostgresDriver", package: "fluent-postgres-driver")
+                .product(name: "FluentPostgresDriver", package: "fluent-postgres-driver"),
+                .product(name: "PRDGenerator", package: "swift"),
+                .product(name: "CommonModels", package: "swift"),
+                .product(name: "DomainCore", package: "swift"),
+                .product(name: "AIProvidersCore", package: "swift"),
+                .product(name: "AIProviderImplementations", package: "swift")
             ]
         ),
 

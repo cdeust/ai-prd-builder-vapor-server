@@ -254,6 +254,30 @@ final class WebSocketInteractionHandler: UserInteractionHandler, @unchecked Send
             await progressCallback(message)
         }
     }
+
+    func showWarning(_ message: String) {
+        Task { [progressCallback] in
+            await progressCallback(message)
+        }
+    }
+
+    func showProgress(_ message: String) {
+        Task { [progressCallback] in
+            await progressCallback(message)
+        }
+    }
+
+    func showDebug(_ message: String) {
+        Task { [progressCallback] in
+            await progressCallback(message)
+        }
+    }
+
+    func showSectionContent(_ content: String) {
+        Task { [progressCallback] in
+            await progressCallback(content)
+        }
+    }
 }
 
 final class StreamingWebSocketInteractionHandler: UserInteractionHandler, @unchecked Sendable {
@@ -384,5 +408,25 @@ final class StreamingWebSocketInteractionHandler: UserInteractionHandler, @unche
         await sectionCallback(title, content, sectionOrder)
 
         currentSectionContent = nil
+    }
+
+    func showWarning(_ message: String) {
+        print("[StreamingHandler] ⚠️ Warning: \(message)")
+        showInfo(message)
+    }
+
+    func showProgress(_ message: String) {
+        print("[StreamingHandler] ⏳ Progress: \(message)")
+        showInfo(message)
+    }
+
+    func showDebug(_ message: String) {
+        print("[StreamingHandler] 🔍 Debug: \(message)")
+        showInfo(message)
+    }
+
+    func showSectionContent(_ content: String) {
+        print("[StreamingHandler] 📝 Section content received")
+        showInfo(content)
     }
 }

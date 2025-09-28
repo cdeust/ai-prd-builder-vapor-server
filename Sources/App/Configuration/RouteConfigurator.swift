@@ -1,5 +1,9 @@
 import Vapor
 import Presentation
+import PRDGenerator
+import CommonModels
+import DomainCore
+import AIProvidersCore
 
 /// Handles route configuration for the application
 public final class RouteConfigurator {
@@ -57,5 +61,12 @@ public final class RouteConfigurator {
         try app.register(collection: managementController)
         try app.register(collection: providerController)
         try app.register(collection: webSocketController)
+
+        // Register new PRDGenerator WebSocket route with streaming
+        registerPRDGeneratorWebSocket()
+    }
+
+    private func registerPRDGeneratorWebSocket() {
+        app.webSocket("api", "v1", "prd", "generate", "stream", onUpgrade: PRDGeneratorWebSocketRoute.handleGenerateWithStreaming)
     }
 }

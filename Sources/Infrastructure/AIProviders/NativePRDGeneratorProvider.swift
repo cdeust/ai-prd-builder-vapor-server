@@ -146,4 +146,16 @@ final class NonInteractiveHandler: UserInteractionHandler {
 
     func showInfo(_ message: String) {
     }
+
+    func showWarning(_ message: String) {
+    }
+
+    func showProgress(_ message: String) {
+    }
+
+    func showDebug(_ message: String) {
+    }
+
+    func showSectionContent(_ content: String) {
+    }
 }
