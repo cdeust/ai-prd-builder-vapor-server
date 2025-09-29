@@ -11,6 +11,7 @@ public struct PRDDocument: Sendable {
     public let generatedBy: String
     public let confidence: Double
     public let version: Int
+    public let professionalAnalysis: ProfessionalAnalysis?
 
     public init(
         id: UUID = UUID(),
@@ -22,7 +23,8 @@ public struct PRDDocument: Sendable {
         generatedAt: Date = Date(),
         generatedBy: String,
         confidence: Double,
-        version: Int = 1
+        version: Int = 1,
+        professionalAnalysis: ProfessionalAnalysis? = nil
     ) {
         self.id = id
         self.requestId = requestId
@@ -34,6 +36,7 @@ public struct PRDDocument: Sendable {
         self.generatedBy = generatedBy
         self.confidence = confidence
         self.version = version
+        self.professionalAnalysis = professionalAnalysis
     }
 }
 
@@ -66,6 +69,8 @@ extension PRDDocument {
 
     /// Check if document needs human review based on business rules
     public var needsReview: Bool {
-        confidence < 0.7 || metadata.tags.contains("needs-review")
+        confidence < 0.7 ||
+        metadata.tags.contains("needs-review") ||
+        (professionalAnalysis?.hasCriticalIssues ?? false)
     }
 }

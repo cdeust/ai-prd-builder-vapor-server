@@ -8,7 +8,6 @@ import AIProvidersCore
 public actor VaporWebSocketAdapter {
     private weak var ws: WebSocket?
     private var pendingQuestionContinuation: CheckedContinuation<String, Never>?
-    private var messageQueue: [WebSocketMessage] = []
 
     public init(ws: WebSocket) {
         self.ws = ws

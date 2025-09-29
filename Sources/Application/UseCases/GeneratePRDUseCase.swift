@@ -51,7 +51,8 @@ public final class GeneratePRDUseCase {
                 )
             ),
             generatedBy: result.metadata.provider,
-            confidence: result.confidence
+            confidence: result.confidence,
+            professionalAnalysis: result.professionalAnalysis
         )
 
         // Validate document
@@ -83,7 +84,8 @@ public final class GeneratePRDUseCase {
                 generatedAt: existing.generatedAt,
                 generatedBy: result.metadata.provider,
                 confidence: result.confidence,
-                version: existing.version + 1
+                version: existing.version + 1,
+                professionalAnalysis: result.professionalAnalysis
             )
             savedDocument = try await documentRepository.update(updatedDocument)
         } else {

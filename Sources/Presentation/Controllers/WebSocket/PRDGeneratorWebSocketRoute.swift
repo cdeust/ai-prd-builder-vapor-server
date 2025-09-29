@@ -94,11 +94,17 @@ public final class PRDGeneratorWebSocketRoute {
                 // Create AI provider (Apple Intelligence preferred)
                 let provider = AppleProvider(mode: .hybrid)
 
-                // Create configuration with Chain-of-Thought enabled
+                // Create configuration with professional analysis enabled
                 let config = Configuration(
                     maxPrivacyLevel: .onDevice,
                     useChainOfThought: message.useChainOfThought ?? false,
-                    useSelfConsistency: message.useSelfConsistency ?? false
+                    useSelfConsistency: message.useSelfConsistency ?? false,
+                    enableProfessionalAnalysis: true,
+                    detectArchitecturalConflicts: true,
+                    predictTechnicalChallenges: true,
+                    analyzeComplexity: true,
+                    identifyScalingBreakpoints: true,
+                    showCriticalDecisions: true
                 )
 
                 // Create WebSocketInteractionHandler with adapter
@@ -121,22 +127,35 @@ public final class PRDGeneratorWebSocketRoute {
 
                 print("[PRDGen-WS] Generation complete!")
 
-                // Send completion message
+                // Send completion message with professional analysis
                 let markdown = "# \(prd.title)\n\n" + prd.sections.map { "## \($0.title)\n\n\($0.content)\n\n" }.joined()
+
+                var prdPayload: [String: Any] = [
+                    "title": prd.title,
+                    "content": markdown,
+                    "sections": prd.sections.map { section in
+                        [
+                            "title": section.title,
+                            "content": section.content
+                        ]
+                    }
+                ]
+
+                // Include professional analysis if present
+                if let analysis = prd.professionalAnalysis {
+                    prdPayload["professionalAnalysis"] = [
+                        "hasCriticalIssues": analysis.hasCriticalIssues,
+                        "executiveSummary": analysis.executiveSummary,
+                        "conflictCount": analysis.conflictCount,
+                        "challengeCount": analysis.challengeCount,
+                        "complexityScore": analysis.complexityScore as Any,
+                        "blockingIssues": analysis.blockingIssues
+                    ]
+                }
+
                 let completionMessage = [
                     "type": "complete",
-                    "payload": [
-                        "prd": [
-                            "title": prd.title,
-                            "content": markdown,
-                            "sections": prd.sections.map { section in
-                                [
-                                    "title": section.title,
-                                    "content": section.content
-                                ]
-                            }
-                        ]
-                    ]
+                    "payload": ["prd": prdPayload]
                 ] as [String: Any]
 
                 if let jsonData = try? JSONSerialization.data(withJSONObject: completionMessage),

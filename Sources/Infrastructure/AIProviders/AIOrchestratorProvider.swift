@@ -429,4 +429,37 @@ final class StreamingWebSocketInteractionHandler: UserInteractionHandler, @unche
         print("[StreamingHandler] 📝 Section content received")
         showInfo(content)
     }
+
+    // MARK: - Professional Analysis Methods
+
+    func showProfessionalAnalysis(_ summary: String, hasCritical: Bool) {
+        print("[StreamingHandler] 🔬 Professional Analysis: \(summary)")
+        Task {
+            await progressCallback("🔬 Professional Analysis: \(hasCritical ? "⚠️ CRITICAL ISSUES FOUND" : "✅ No critical issues")")
+            await progressCallback(summary)
+        }
+    }
+
+    func showArchitecturalConflict(_ conflict: String, severity: String) {
+        print("[StreamingHandler] ⚡ Architectural Conflict [\(severity)]: \(conflict)")
+        Task {
+            let icon = severity == "critical" ? "🔴" : severity == "high" ? "🟡" : "🟢"
+            await progressCallback("\(icon) Conflict: \(conflict)")
+        }
+    }
+
+    func showTechnicalChallenge(_ challenge: String, priority: String) {
+        print("[StreamingHandler] 🚨 Technical Challenge [\(priority)]: \(challenge)")
+        Task {
+            let icon = priority == "critical" ? "🚨" : priority == "high" ? "⚠️" : "📋"
+            await progressCallback("\(icon) Challenge: \(challenge)")
+        }
+    }
+
+    func showComplexityScore(_ score: Int, needsBreakdown: Bool) {
+        print("[StreamingHandler] 📊 Complexity Score: \(score) points")
+        Task {
+            await progressCallback("📊 Complexity: \(score) story points \(needsBreakdown ? "(needs breakdown)" : "")")
+        }
+    }
 }
