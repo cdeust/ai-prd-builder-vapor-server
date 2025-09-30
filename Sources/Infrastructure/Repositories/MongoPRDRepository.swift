@@ -2,7 +2,7 @@ import Foundation
 import MongoSwift
 import Domain
 
-public final class MongoPRDRepository: PRDRepositoryProtocol {
+public final class MongoPRDRepository: PRDRepositoryProtocol, @unchecked Sendable {
     private let collection: MongoCollection<MongoPRDRequestModel>
 
     public init(database: MongoDatabase) {

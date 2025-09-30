@@ -42,6 +42,40 @@ public final class DatabaseRepositoryFactory {
         return repositories
     }
 
+    /// Create mockup upload repository
+    public func createMockupUploadRepository() throws -> MockupUploadRepositoryProtocol {
+        if Environment.get("SKIP_DATABASE") == "true" {
+            app.logger.warning("⚠️ Using in-memory mockup repository (no persistence)")
+            return InMemoryMockupUploadRepository()
+        }
+
+        let databaseType = Environment.get("DATABASE_TYPE")?.lowercased() ?? "postgresql"
+
+        switch databaseType {
+        case "supabase":
+            return try createSupabaseMockupUploadRepository()
+        case "postgresql", "postgres", "fluent":
+            // Would use Fluent repository if implemented
+            return try createSupabaseMockupUploadRepository()
+        default:
+            return try createSupabaseMockupUploadRepository()
+        }
+    }
+
+    private func createSupabaseMockupUploadRepository() throws -> MockupUploadRepositoryProtocol {
+        guard let supabaseURL = Environment.get("SUPABASE_URL"),
+              let supabaseKey = Environment.get("SUPABASE_ANON_KEY") else {
+            throw ConfigurationError.invalidConfiguration("Missing SUPABASE_URL or SUPABASE_ANON_KEY")
+        }
+
+        return SupabaseMockupUploadRepository(
+            httpClient: httpClient,
+            supabaseURL: supabaseURL,
+            apiKey: supabaseKey,
+            schema: "public"
+        )
+    }
+
     // MARK: - Private Methods
 
     private func createInMemoryRepositories() -> (prd: PRDRepositoryProtocol, document: PRDDocumentRepositoryProtocol) {

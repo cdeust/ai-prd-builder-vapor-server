@@ -30,9 +30,9 @@ struct SupabaseRequestBuilder {
         return request
     }
 
-    func buildFindByFieldRequest(tableName: String, field: String, value: String, limit: Int? = nil, offset: Int? = nil, orderBy: String? = nil) -> HTTPClientRequest {
+    func buildFindByFieldRequest(tableName: String, field: String, value: String, comparison: String = "eq", limit: Int? = nil, offset: Int? = nil, orderBy: String? = nil) -> HTTPClientRequest {
         let encodedValue = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
-        var urlComponents = "\(supabaseURL)/rest/v1/\(tableName)?\(field)=eq.\(encodedValue)&select=*"
+        var urlComponents = "\(supabaseURL)/rest/v1/\(tableName)?\(field)=\(comparison).\(encodedValue)&select=*"
 
         if let orderBy = orderBy {
             urlComponents += "&order=\(orderBy).desc"
@@ -46,6 +46,38 @@ struct SupabaseRequestBuilder {
 
         var request = HTTPClientRequest(url: urlComponents)
         request.method = .GET
+        addAuthHeaders(to: &request)
+        return request
+    }
+
+    func buildFindByMultipleFieldsRequest(tableName: String, filters: [(field: String, value: String, comparison: String)], limit: Int? = nil, offset: Int? = nil, orderBy: String? = nil) -> HTTPClientRequest {
+        var urlComponents = "\(supabaseURL)/rest/v1/\(tableName)?select=*"
+
+        for filter in filters {
+            let encodedValue = filter.value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? filter.value
+            urlComponents += "&\(filter.field)=\(filter.comparison).\(encodedValue)"
+        }
+
+        if let orderBy = orderBy {
+            urlComponents += "&order=\(orderBy).desc"
+        }
+        if let limit = limit {
+            urlComponents += "&limit=\(limit)"
+        }
+        if let offset = offset {
+            urlComponents += "&offset=\(offset)"
+        }
+
+        var request = HTTPClientRequest(url: urlComponents)
+        request.method = .GET
+        addAuthHeaders(to: &request)
+        return request
+    }
+
+    func buildDeleteByFieldRequest(tableName: String, field: String, value: String) -> HTTPClientRequest {
+        let encodedValue = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+        var request = HTTPClientRequest(url: "\(supabaseURL)/rest/v1/\(tableName)?\(field)=eq.\(encodedValue)")
+        request.method = .DELETE
         addAuthHeaders(to: &request)
         return request
     }

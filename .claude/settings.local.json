@@ -3,7 +3,8 @@
     "allow": [
       "Read(//Users/cdeust/Tools/mcp-tools/claude-code-development/Claude-Code-Development-Kit/Projects/ai-prd-builder/swift/Sources/CommonModels/**)",
       "Read(//Users/cdeust/Tools/mcp-tools/claude-code-development/Claude-Code-Development-Kit/Projects/ai-prd-builder/**)",
-      "Read(//Users/cdeust/Tools/mcp-tools/claude-code-development/Claude-Code-Development-Kit/Projects/ai-prd-builder-web/**)"
+      "Read(//Users/cdeust/Tools/mcp-tools/claude-code-development/Claude-Code-Development-Kit/Projects/ai-prd-builder-web/**)",
+      "Read(//Users/cdeust/Tools/mcp-tools/claude-code-development/Claude-Code-Development-Kit/Projects/**)"
     ],
     "deny": [],
     "ask": []

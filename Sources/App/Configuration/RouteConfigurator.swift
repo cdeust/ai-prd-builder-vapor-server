@@ -57,10 +57,15 @@ public final class RouteConfigurator {
             throw ConfigurationError.missingDependency("PRDWebSocketController")
         }
 
+        guard let mockupController = app.diContainer.resolve(MockupController.self) else {
+            throw ConfigurationError.missingDependency("MockupController")
+        }
+
         try app.register(collection: generationController)
         try app.register(collection: managementController)
         try app.register(collection: providerController)
         try app.register(collection: webSocketController)
+        try app.register(collection: mockupController)
 
         // Register new PRDGenerator WebSocket route with streaming
         registerPRDGeneratorWebSocket()
