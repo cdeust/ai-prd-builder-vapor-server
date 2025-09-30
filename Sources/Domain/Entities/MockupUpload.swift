@@ -98,7 +98,7 @@ extension MockupUpload {
             uploadedAt: uploadedAt,
             analysisResult: result,
             analysisConfidence: confidence,
-            isProcessed: isProcessed,
+            isProcessed: true, // Mark as processed when analysis is complete
             expiresAt: expiresAt,
             createdAt: createdAt,
             updatedAt: Date()

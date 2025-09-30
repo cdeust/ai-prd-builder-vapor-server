@@ -109,8 +109,8 @@ public final class PRDGeneratorWebSocketRoute {
 
                 // Create WebSocketInteractionHandler with adapter
                 let wsHandler = WebSocketInteractionHandler(
-                    sendMessage: await adapter.makeSender(),
-                    receiveResponse: await adapter.makeReceiver()
+                    sendMessage: adapter.makeSender(),
+                    receiveResponse: adapter.makeReceiver()
                 )
 
                 // Create PRD Generator with WebSocket support
@@ -174,14 +174,4 @@ public final class PRDGeneratorWebSocketRoute {
             }
         }
     }
-}
-
-// MARK: - Message Types
-
-struct ClientMessage: Codable {
-    let type: String
-    let input: String?
-    let response: String?
-    let useChainOfThought: Bool?
-    let useSelfConsistency: Bool?
 }

@@ -10,8 +10,7 @@ func loadEnvironmentFile() {
     // Try multiple possible locations
     let possiblePaths = [
         fileManager.currentDirectoryPath, // Current working directory
-        URL(fileURLWithPath: #file).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().path, // Project root from source file
-        "/Users/cdeust/Tools/mcp-tools/claude-code-development/Claude-Code-Development-Kit/Projects/ai-prd-builder-vapor-server" // Absolute path as fallback
+        URL(fileURLWithPath: #file).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().path // Project root from source file
     ]
 
     for basePath in possiblePaths {

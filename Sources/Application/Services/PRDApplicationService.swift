@@ -8,6 +8,7 @@ public final class PRDApplicationService {
     private let statusService: PRDStatusService
     private let exportService: PRDExportService
     private let aiProvider: AIProviderPort
+    private let prdRepository: PRDRepositoryProtocol
 
     public init(
         generatePRDUseCase: GeneratePRDUseCase,
@@ -16,6 +17,7 @@ public final class PRDApplicationService {
         documentRepository: PRDDocumentRepositoryProtocol,
         aiProvider: AIProviderPort
     ) {
+        self.prdRepository = prdRepository
         self.workflowService = PRDWorkflowService(
             generatePRDUseCase: generatePRDUseCase,
             analyzeRequirementsUseCase: analyzeRequirementsUseCase,
@@ -37,6 +39,11 @@ public final class PRDApplicationService {
     /// Get the AI provider for direct usage
     public func getAIProvider() -> AIProviderPort {
         return aiProvider
+    }
+
+    /// Get the PRD repository for direct access
+    public func getPRDRepository() -> PRDRepositoryProtocol {
+        return prdRepository
     }
 
     /// Complete PRD generation workflow with analysis

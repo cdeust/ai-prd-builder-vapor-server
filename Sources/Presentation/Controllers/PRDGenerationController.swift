@@ -15,10 +15,49 @@ public final class PRDGenerationController: RouteCollection, @unchecked Sendable
     public func boot(routes: RoutesBuilder) throws {
         let prd = routes.grouped("api", "v1", "prd")
 
+        // Create PRD request without starting generation (for Request-First workflow)
+        prd.post("requests", use: createPRDRequest)
+
+        // Generation endpoints
         prd.post("generate", use: generatePRD)
         prd.post("generate", "interactive", use: generatePRDInteractive)
         prd.post("generate", "provider", ":providerName", use: generatePRDWithProvider)
         prd.post("analyze", use: analyzeRequirements)
+    }
+
+    /// Create a PRD request without starting generation (Request-First workflow)
+    func createPRDRequest(req: Request) async throws -> CreatePRDRequestResponseDTO {
+        let dto = try req.content.decode(CreatePRDRequestDTO.self)
+
+        let requestId = dto.requestId ?? UUID()
+        let requester = Requester(
+            id: dto.requester?.id ?? "anonymous",
+            email: dto.requester?.email
+        )
+
+        let request = PRDRequest(
+            id: requestId,
+            title: dto.title,
+            description: dto.description,
+            mockupSources: [],
+            priority: Priority(rawValue: dto.priority ?? "medium") ?? .medium,
+            requester: requester,
+            metadata: RequestMetadata(),
+            createdAt: Date(),
+            status: .pending
+        )
+
+        try request.validate()
+        let savedRequest = try await applicationService.getPRDRepository().save(request)
+
+        return CreatePRDRequestResponseDTO(
+            requestId: savedRequest.id.uuidString,
+            title: savedRequest.title,
+            description: savedRequest.description,
+            status: savedRequest.status.rawValue,
+            createdAt: savedRequest.createdAt,
+            message: "PRD request created. You can now upload mockups using POST /api/v1/mockups/upload"
+        )
     }
 
     func generatePRD(req: Request) async throws -> PRDGenerationResponseDTO {

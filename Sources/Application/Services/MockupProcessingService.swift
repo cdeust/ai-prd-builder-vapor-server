@@ -20,14 +20,21 @@ public final class MockupProcessingService: Sendable {
     }
 
     /// Upload and process a mockup image
+    /// Requires PRD request to exist first for optimal contextual analysis
     public func uploadMockup(
         data: Data,
         fileName: String,
         mimeType: String,
         requestId: UUID
     ) async throws -> MockupUpload {
+        // Enforce Request-First workflow for best analysis quality
+        // PRD request must exist to provide context (title, description) for AI analysis
         guard let request = try await prdRepository.findById(requestId) else {
-            throw DomainError.notFound("PRD request not found: \(requestId)")
+            throw DomainError.notFound(
+                "PRD request not found: \(requestId). " +
+                "Please create a PRD request first using POST /api/v1/prd/requests " +
+                "to enable contextual mockup analysis with higher confidence scores."
+            )
         }
 
         let currentCount = try await uploadRepository.countByRequestId(requestId)
@@ -53,11 +60,20 @@ public final class MockupProcessingService: Sendable {
         try upload.validate()
         let savedUpload = try await uploadRepository.save(upload)
 
-        Task {
-            try? await analyzeAndUpdateMockup(uploadId: savedUpload.id, request: request)
-        }
+        // Analyze immediately (blocking) - client will show waiting screen
+        do {
+            try await analyzeAndUpdateMockup(uploadId: savedUpload.id, request: request)
+            print("[MockupProcessingService] ✅ Mockup analysis completed: \(savedUpload.id)")
 
-        return savedUpload
+            // Fetch updated upload with analysis results
+            guard let analyzedUpload = try await uploadRepository.findById(savedUpload.id) else {
+                return savedUpload
+            }
+            return analyzedUpload
+        } catch {
+            print("[MockupProcessingService] ❌ Mockup analysis failed: \(savedUpload.id) - \(error)")
+            throw error
+        }
     }
 
     /// Analyze a mockup and update with results
@@ -175,30 +191,4 @@ public final class MockupProcessingService: Sendable {
     }
 }
 
-public struct ConsolidatedMockupAnalysis: Sendable {
-    public let totalMockups: Int
-    public let analyzedMockups: Int
-    public let uiElements: [String]
-    public let userFlows: [UserFlow]
-    public let businessLogicInferences: [BusinessLogicInference]
-    public let extractedText: [String]
-    public let averageConfidence: Double
 
-    public init(
-        totalMockups: Int,
-        analyzedMockups: Int,
-        uiElements: [String],
-        userFlows: [UserFlow],
-        businessLogicInferences: [BusinessLogicInference],
-        extractedText: [String],
-        averageConfidence: Double
-    ) {
-        self.totalMockups = totalMockups
-        self.analyzedMockups = analyzedMockups
-        self.uiElements = uiElements
-        self.userFlows = userFlows
-        self.businessLogicInferences = businessLogicInferences
-        self.extractedText = extractedText
-        self.averageConfidence = averageConfidence
-    }
-}

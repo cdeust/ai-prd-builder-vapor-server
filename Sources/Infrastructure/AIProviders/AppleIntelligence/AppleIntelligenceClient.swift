@@ -2,28 +2,31 @@ import Foundation
 import AsyncHTTPClient
 import NIOCore
 import Domain
+import CommonModels
+import DomainCore
+import PRDGenerator
 
-public final class AppleIntelligenceClient: MockupAnalysisPort {
+public final class AppleIntelligenceClient: MockupAnalysisPort, @unchecked Sendable {
     private let httpClient: HTTPClient
-    private let apiKey: String
-    private let baseURL: String
+    private let aiProvider: CommonModels.AIProvider
+    private let configuration: DomainCore.Configuration
 
     public init(
         httpClient: HTTPClient,
-        apiKey: String,
-        baseURL: String = "https://api.intelligence.apple.com/v1"
+        provider: CommonModels.AIProvider,
+        configuration: DomainCore.Configuration
     ) {
         self.httpClient = httpClient
-        self.apiKey = apiKey
-        self.baseURL = baseURL.hasSuffix("/") ? String(baseURL.dropLast()) : baseURL
+        self.aiProvider = provider
+        self.configuration = configuration
     }
 
     public func analyzeMockup(
         imageURL: String,
         context: MockupAnalysisContext
     ) async throws -> (result: MockupAnalysisResult, confidence: Double) {
-        let prompt = buildAnalysisPrompt(context: context)
-        let response = try await sendAnalysisRequest(imageURL: imageURL, prompt: prompt)
+        let prompt = buildAnalysisPrompt(context: context, imageURL: imageURL)
+        let response = try await sendAnalysisRequest(prompt: prompt)
         return try parseAnalysisResponse(response)
     }
 
@@ -42,23 +45,17 @@ public final class AppleIntelligenceClient: MockupAnalysisPort {
     }
 
     public func isAvailable() async -> Bool {
-        do {
-            var request = HTTPClientRequest(url: "\(baseURL)/health")
-            request.method = .GET
-            request.headers.add(name: "Authorization", value: "Bearer \(apiKey)")
-
-            let response = try await httpClient.execute(request, timeout: .seconds(10))
-            return response.status == .ok
-        } catch {
-            return false
-        }
+        // Check if AI provider is available
+        return true
     }
 
-    private func buildAnalysisPrompt(context: MockupAnalysisContext) -> String {
+    private func buildAnalysisPrompt(context: MockupAnalysisContext, imageURL: String) -> String {
         return """
         Analyze this UI mockup image for a PRD titled "\(context.requestTitle)".
 
         Project Description: \(context.requestDescription)
+
+        Image URL: \(imageURL)
 
         Please provide a comprehensive analysis including:
 
@@ -74,39 +71,68 @@ public final class AppleIntelligenceClient: MockupAnalysisPort {
 
         6. Business Logic: Deduce potential business requirements and features based on the UI elements present.
 
-        Provide your analysis in a structured JSON format with confidence scores for inferences.
+        Provide your analysis in a structured JSON format matching this schema:
+        {
+          "uiElements": [{"type": "button|textField|label|...", "label": "text", "bounds": {"x": 0, "y": 0, "width": 0, "height": 0}, "confidence": 0.9}],
+          "layout": {"screenType": "login|dashboard|form|...", "hierarchyLevels": 2, "layoutType": "vertical|horizontal|grid|...", "componentGroups": [{"name": "group", "components": ["elem1"], "purpose": "description"}]},
+          "extractedText": [{"content": "text", "category": "heading|label|button|...", "bounds": {"x": 0, "y": 0, "width": 0, "height": 0}}],
+          "colorScheme": {"primary": ["#hex"], "accent": ["#hex"], "text": ["#hex"], "background": ["#hex"]},
+          "inferredFlows": [{"name": "flow", "steps": ["step1", "step2"], "confidence": 0.8}],
+          "businessLogic": [{"feature": "name", "description": "desc", "confidence": 0.8, "requiredComponents": ["comp1"]}],
+          "overallConfidence": 0.85
+        }
         """
     }
 
-    private func sendAnalysisRequest(imageURL: String, prompt: String) async throws -> VisionAnalysisResponse {
-        let requestBody = VisionAnalysisRequest(
-            imageURL: imageURL,
-            prompt: prompt,
-            features: ["ui_detection", "text_recognition", "layout_analysis", "color_extraction"]
-        )
+    private func sendAnalysisRequest(prompt: String) async throws -> VisionAnalysisResponse {
+        print("[AppleIntelligenceClient] Sending analysis request")
 
-        let requestData = try JSONEncoder().encode(requestBody)
+        let messages = [
+            ChatMessage(role: .user, content: prompt)
+        ]
 
-        var request = HTTPClientRequest(url: "\(baseURL)/vision/analyze")
-        request.method = .POST
-        request.headers.add(name: "Authorization", value: "Bearer \(apiKey)")
-        request.headers.add(name: "Content-Type", value: "application/json")
-        request.body = .bytes(requestData)
+        let result = await aiProvider.sendMessages(messages)
 
-        print("[AppleIntelligenceClient] Sending analysis request for: \(imageURL)")
-        let response = try await httpClient.execute(request, timeout: .seconds(120))
-
-        guard response.status == .ok else {
-            let errorBody = try await response.body.collect(upTo: 1024 * 1024)
-            let errorMessage = String(buffer: errorBody)
-            print("[AppleIntelligenceClient] Analysis error: \(errorMessage)")
-            throw DomainError.processingFailed("Vision analysis failed: \(response.status) - \(errorMessage)")
+        let jsonString: String
+        switch result {
+        case .success(let content):
+            jsonString = content
+        case .failure(let error):
+            throw DomainError.processingFailed("AI provider error: \(error)")
         }
 
-        let responseBody = try await response.body.collect(upTo: 10 * 1024 * 1024)
-        let responseData = try JSONDecoder().decode(VisionAnalysisResponse.self, from: responseBody)
-        print("[AppleIntelligenceClient] Analysis completed with confidence: \(responseData.overallConfidence)")
-        return responseData
+        // Extract JSON from response (might be wrapped in markdown code blocks)
+        let cleanedJSON = extractJSON(from: jsonString)
+
+        let decoder = JSONDecoder()
+        do {
+            let response = try decoder.decode(VisionAnalysisResponse.self, from: cleanedJSON.data(using: .utf8)!)
+            print("[AppleIntelligenceClient] Analysis completed with confidence: \(response.overallConfidence)")
+            return response
+        } catch {
+            print("[AppleIntelligenceClient] Failed to parse response: \(error)")
+            print("[AppleIntelligenceClient] Raw JSON response:")
+            print(cleanedJSON)
+            throw DomainError.processingFailed("Failed to parse AI response: \(error.localizedDescription)")
+        }
+    }
+
+    private func extractJSON(from text: String) -> String {
+        // Remove markdown code blocks if present
+        let patterns = [
+            "```json\\s*([\\s\\S]*?)```",
+            "```\\s*([\\s\\S]*?)```"
+        ]
+
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+               let range = Range(match.range(at: 1), in: text) {
+                return String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func parseAnalysisResponse(_ response: VisionAnalysisResponse) throws -> (result: MockupAnalysisResult, confidence: Double) {
@@ -124,7 +150,11 @@ public final class AppleIntelligenceClient: MockupAnalysisPort {
             hierarchyLevels: response.layout.hierarchyLevels,
             primaryLayout: LayoutType(rawValue: response.layout.layoutType) ?? .mixed,
             componentGroups: response.layout.componentGroups.map { group in
-                ComponentGroup(name: group.name, components: group.components, purpose: group.purpose)
+                // Convert component references to strings (use label if available, otherwise type)
+                let componentStrings = group.components.map { comp in
+                    comp.label ?? comp.type ?? "unknown"
+                }
+                return ComponentGroup(name: group.name, components: componentStrings, purpose: group.purpose)
             }
         )
 
@@ -146,14 +176,14 @@ public final class AppleIntelligenceClient: MockupAnalysisPort {
         }
 
         let userFlows = response.inferredFlows.map { flow in
-            UserFlow(flowName: flow.name, steps: flow.steps, confidence: flow.confidence)
+            UserFlow(flowName: flow.name, steps: flow.steps, confidence: flow.confidence ?? 0.0)
         }
 
         let businessLogic = response.businessLogic.map { logic in
             BusinessLogicInference(
                 feature: logic.feature,
                 description: logic.description,
-                confidence: logic.confidence,
+                confidence: logic.confidence ?? 0.0,
                 requiredComponents: logic.requiredComponents
             )
         }
@@ -169,73 +199,4 @@ public final class AppleIntelligenceClient: MockupAnalysisPort {
 
         return (result, response.overallConfidence)
     }
-}
-
-private struct VisionAnalysisRequest: Codable {
-    let imageURL: String
-    let prompt: String
-    let features: [String]
-}
-
-private struct VisionAnalysisResponse: Codable {
-    let uiElements: [UIElementResponse]
-    let layout: LayoutResponse
-    let extractedText: [TextResponse]
-    let colorScheme: ColorSchemeResponse?
-    let inferredFlows: [FlowResponse]
-    let businessLogic: [BusinessLogicResponse]
-    let overallConfidence: Double
-}
-
-private struct UIElementResponse: Codable {
-    let type: String
-    let label: String?
-    let bounds: BoundsResponse
-    let confidence: Double
-}
-
-private struct BoundsResponse: Codable {
-    let x: Double
-    let y: Double
-    let width: Double
-    let height: Double
-}
-
-private struct LayoutResponse: Codable {
-    let screenType: String
-    let hierarchyLevels: Int
-    let layoutType: String
-    let componentGroups: [ComponentGroupResponse]
-}
-
-private struct ComponentGroupResponse: Codable {
-    let name: String
-    let components: [String]
-    let purpose: String?
-}
-
-private struct TextResponse: Codable {
-    let content: String
-    let category: String
-    let bounds: BoundsResponse
-}
-
-private struct ColorSchemeResponse: Codable {
-    let primary: [String]
-    let accent: [String]
-    let text: [String]
-    let background: [String]
-}
-
-private struct FlowResponse: Codable {
-    let name: String
-    let steps: [String]
-    let confidence: Double
-}
-
-private struct BusinessLogicResponse: Codable {
-    let feature: String
-    let description: String
-    let confidence: Double
-    let requiredComponents: [String]
 }

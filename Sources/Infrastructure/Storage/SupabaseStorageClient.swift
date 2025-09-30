@@ -28,8 +28,21 @@ public final class SupabaseStorageClient: MockupStoragePort {
         mimeType: String
     ) async throws -> String {
         let timestamp = Int(Date().timeIntervalSince1970)
-        let sanitizedFileName = fileName.replacingOccurrences(of: " ", with: "_")
-        let storagePath = "\(requestId.uuidString)/\(timestamp)_\(sanitizedFileName)"
+
+        // Sanitize filename: keep only alphanumeric, dots, and hyphens
+        let fileExtension = (fileName as NSString).pathExtension
+        let fileNameWithoutExt = (fileName as NSString).deletingPathExtension
+
+        let sanitizedName = fileNameWithoutExt
+            .folding(options: .diacriticInsensitive, locale: .current) // Remove accents
+            .replacingOccurrences(of: "[^a-zA-Z0-9-]", with: "-", options: .regularExpression) // Keep only alphanumeric and hyphens
+            .replacingOccurrences(of: "-+", with: "-", options: .regularExpression) // Remove consecutive hyphens
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-")) // Remove leading/trailing hyphens
+
+        let sanitizedFileName = sanitizedName.isEmpty ? "file" : sanitizedName
+        let fullFileName = fileExtension.isEmpty ? sanitizedFileName : "\(sanitizedFileName).\(fileExtension)"
+
+        let storagePath = "\(requestId.uuidString)/\(timestamp)-\(fullFileName)"
 
         let uploadURL = "\(supabaseURL)/storage/v1/object/\(bucketName)/\(storagePath)"
 
@@ -111,7 +124,9 @@ public final class SupabaseStorageClient: MockupStoragePort {
 
         let payload = ["expiresIn": expiresIn]
         let jsonData = try JSONEncoder().encode(payload)
-        request.body = .bytes(ByteBuffer(data: jsonData))
+        var buffer = ByteBuffer()
+        buffer.writeBytes(jsonData)
+        request.body = .bytes(buffer)
 
         print("[SupabaseStorageClient] Generating signed URL for: \(path)")
         let response = try await httpClient.execute(request, timeout: .seconds(30))
@@ -141,16 +156,15 @@ public final class SupabaseStorageClient: MockupStoragePort {
         request.headers.add(name: "Authorization", value: "Bearer \(apiKey)")
         request.headers.add(name: "Content-Type", value: "application/json")
 
-        let payload: [String: Encodable] = ["prefix": prefix, "limit": 1000]
-
-        // Create a proper encodable structure
         struct ListPayload: Encodable {
             let prefix: String
             let limit: Int
         }
         let listPayload = ListPayload(prefix: prefix, limit: 1000)
         let jsonData = try JSONEncoder().encode(listPayload)
-        request.body = .bytes(ByteBuffer(data: jsonData))
+        var buffer = ByteBuffer()
+        buffer.writeBytes(jsonData)
+        request.body = .bytes(buffer)
 
         print("[SupabaseStorageClient] Listing files for request: \(requestId)")
         let response = try await httpClient.execute(request, timeout: .seconds(30))
@@ -182,12 +196,4 @@ public final class SupabaseStorageClient: MockupStoragePort {
         let response = try await httpClient.execute(request, timeout: .seconds(30))
         return response.status == .ok
     }
-}
-
-private struct SignedURLResponse: Codable {
-    let signedURL: String
-}
-
-private struct StorageFile: Codable {
-    let name: String
 }

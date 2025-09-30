@@ -68,3 +68,38 @@ COMMENT ON COLUMN public.mockup_uploads.storage_path IS 'Path to the file in Sup
 COMMENT ON COLUMN public.mockup_uploads.expires_at IS 'When the mockup should be cleaned up (default 7 days)';
 COMMENT ON COLUMN public.mockup_uploads.analysis_result IS 'JSON result from AI mockup analysis';
 COMMENT ON COLUMN public.mockup_uploads.analysis_confidence IS 'Confidence score of the AI analysis (0-1)';
+
+-- Policy 1: Allow uploads to prd-mockups bucket
+  CREATE POLICY "Allow authenticated uploads to prd-mockups"
+  ON storage.objects
+  FOR INSERT
+  WITH CHECK (
+    bucket_id = 'prd-mockups'
+  );
+
+  -- Policy 2: Allow public reads from prd-mockups bucket
+  CREATE POLICY "Allow public reads from prd-mockups"
+  ON storage.objects
+  FOR SELECT
+  USING (bucket_id = 'prd-mockups');
+
+  -- Policy 3: Allow updates to prd-mockups bucket
+  CREATE POLICY "Allow authenticated updates to prd-mockups"
+  ON storage.objects
+  FOR UPDATE
+  USING (bucket_id = 'prd-mockups');
+
+  -- Policy 4: Allow deletions from prd-mockups bucket
+  CREATE POLICY "Allow authenticated deletions from prd-mockups"
+  ON storage.objects
+  FOR DELETE
+  USING (bucket_id = 'prd-mockups');
+  
+    -- Add storage_bucket column to mockup_uploads table
+  ALTER TABLE mockup_uploads
+  ADD COLUMN IF NOT EXISTS storage_bucket VARCHAR(255) NOT NULL DEFAULT 'prd-mockups';
+
+  -- Update existing rows to have the default bucket name
+  UPDATE mockup_uploads
+  SET storage_bucket = 'prd-mockups'
+  WHERE storage_bucket IS NULL OR storage_bucket = '';

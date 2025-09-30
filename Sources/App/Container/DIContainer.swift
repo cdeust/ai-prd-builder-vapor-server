@@ -5,6 +5,9 @@ import Domain
 import Application
 import Infrastructure
 import Presentation
+import CommonModels
+import DomainCore
+import AIProviderImplementations
 
 /// Dependency Injection Container for the application
 /// Follows Inversion of Control principle for clean architecture
@@ -99,14 +102,77 @@ public final class DIContainer: @unchecked Sendable {
             throw ConfigurationError.missingDependency("HTTPClient not found")
         }
 
-        // Apple Intelligence uses Foundation Models - no API key required
-        let baseURL = Environment.get("APPLE_INTELLIGENCE_URL") ?? "https://api.intelligence.apple.com/v1"
+        // Create configuration for ai-prd-builder package
+        let modelPreferences = DomainCore.ModelPreferences(
+            temperature: 0.3,
+            maxTokens: 4000
+        )
+
+        let configuration = DomainCore.Configuration(
+            anthropicAPIKey: Environment.get("ANTHROPIC_API_KEY"),
+            openAIAPIKey: Environment.get("OPENAI_API_KEY"),
+            geminiAPIKey: Environment.get("GEMINI_API_KEY"),
+            maxPrivacyLevel: .external,
+            preferredProvider: Environment.get("MOCKUP_PREFERRED_PROVIDER")?.lowercased() ?? "apple-intelligence",
+            modelPreferences: modelPreferences
+        )
+
+        // Create AI provider based on configuration
+        let aiProvider = try createAIPRDBuilderProvider(configuration: configuration)
 
         return AppleIntelligenceClient(
             httpClient: httpClient,
-            apiKey: "", // Empty string - Foundation Models don't require authentication
-            baseURL: baseURL
+            provider: aiProvider,
+            configuration: configuration
         )
+    }
+
+    private func createAIPRDBuilderProvider(configuration: DomainCore.Configuration) throws -> CommonModels.AIProvider {
+        let providerType = configuration.preferredProvider
+
+        switch providerType {
+        case "apple", "apple-intelligence":
+            // Use Apple Intelligence Foundation Models (on-device)
+            app.logger.info("🍎 Using Apple Intelligence Foundation Models for mockup analysis")
+            return AIProviderImplementations.AppleProvider(mode: .hybrid)
+
+        case "anthropic":
+            guard let apiKey = configuration.anthropicAPIKey, !apiKey.isEmpty else {
+                throw ConfigurationError.missingEnvironmentVariable("ANTHROPIC_API_KEY required for mockup analysis")
+            }
+            app.logger.info("🤖 Using Anthropic for mockup analysis")
+            return AIProviderImplementations.AnthropicProvider(apiKey: apiKey)
+
+        case "openai":
+            guard let apiKey = configuration.openAIAPIKey, !apiKey.isEmpty else {
+                throw ConfigurationError.missingEnvironmentVariable("OPENAI_API_KEY required for mockup analysis")
+            }
+            app.logger.info("🤖 Using OpenAI for mockup analysis")
+            return AIProviderImplementations.OpenAIProvider(apiKey: apiKey)
+
+        case "gemini":
+            guard let apiKey = configuration.geminiAPIKey, !apiKey.isEmpty else {
+                throw ConfigurationError.missingEnvironmentVariable("GEMINI_API_KEY required for mockup analysis")
+            }
+            app.logger.info("🤖 Using Gemini for mockup analysis")
+            return AIProviderImplementations.GeminiProvider(apiKey: apiKey)
+
+        default:
+            // Default to Apple Intelligence if available, otherwise Anthropic
+            #if canImport(FoundationModels)
+            if #available(macOS 16.0, iOS 18.0, *) {
+                app.logger.info("🍎 Unknown provider '\(providerType)', defaulting to Apple Intelligence")
+                return AIProviderImplementations.AppleProvider(mode: .hybrid)
+            }
+            #endif
+
+            // Fallback to Anthropic if Apple Intelligence not available
+            if let apiKey = configuration.anthropicAPIKey, !apiKey.isEmpty {
+                app.logger.warning("⚠️ Unknown provider '\(providerType ?? "none")', falling back to Anthropic")
+                return AIProviderImplementations.AnthropicProvider(apiKey: apiKey)
+            }
+            throw ConfigurationError.invalidConfiguration("No valid AI provider configured for mockup analysis")
+        }
     }
 
     /// Register application layer services
