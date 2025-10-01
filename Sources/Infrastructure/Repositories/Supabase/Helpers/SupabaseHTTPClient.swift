@@ -45,7 +45,8 @@ struct SupabaseHTTPClient {
     func executeCount(_ request: HTTPClientRequest) async throws -> Int {
         let response = try await httpClient.execute(request, timeout: .seconds(30))
 
-        guard response.status == .ok else {
+        // Supabase returns 206 Partial Content for count queries with Prefer: count=exact header
+        guard response.status == .ok || response.status == .partialContent else {
             let errorBody = try await response.body.collect(upTo: 1024 * 1024)
             let errorMessage = String(buffer: errorBody)
             throw DomainError.processingFailed("Supabase count error: \(response.status) - \(errorMessage)")
