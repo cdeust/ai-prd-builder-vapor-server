@@ -1,8 +1,8 @@
 import Foundation
 import Vapor
 import AsyncHTTPClient
-import Domain
 import Infrastructure
+import Domain
 
 /// Factory responsible for creating database repositories based on configuration
 public final class DatabaseRepositoryFactory {

@@ -10,12 +10,13 @@ struct SupabaseHTTPClient {
 
     init(httpClient: HTTPClient, supabaseURL: String, apiKey: String) {
         self.httpClient = httpClient
-        self.supabaseURL = supabaseURL.hasSuffix("/") ? String(supabaseURL.dropLast()) : supabaseURL
-        self.apiKey = apiKey
+        let trimmedURL = supabaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.supabaseURL = trimmedURL.hasSuffix("/") ? String(trimmedURL.dropLast()) : trimmedURL
+        self.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func execute<T: Decodable>(_ request: HTTPClientRequest) async throws -> T {
-        print("[SupabaseHTTPClient] Executing request: \(request.method) \(request.url)")
+        print("[SupabaseHTTPClient] Executing request: \(request.method) '\(request.url)'")
         let response = try await httpClient.execute(request, timeout: .seconds(30))
         print("[SupabaseHTTPClient] Response status: \(response.status.code)")
 

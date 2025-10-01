@@ -8,14 +8,19 @@ struct SupabaseRequestBuilder {
     private let schema: String
 
     init(supabaseURL: String, apiKey: String, schema: String = "public") {
-        self.supabaseURL = supabaseURL.hasSuffix("/") ? String(supabaseURL.dropLast()) : supabaseURL
-        self.apiKey = apiKey
+        let trimmedURL = supabaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.supabaseURL = trimmedURL.hasSuffix("/") ? String(trimmedURL.dropLast()) : trimmedURL
+        self.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         self.schema = schema
     }
 
     func buildInsertRequest<T: Encodable>(tableName: String, model: T) throws -> HTTPClientRequest {
         let requestData = try JSONEncoder().encode(model)
-        var request = HTTPClientRequest(url: "\(supabaseURL)/rest/v1/\(tableName)")
+        let urlString = "\(supabaseURL)/rest/v1/\(tableName)"
+        guard let url = URL(string: urlString) else {
+            throw DomainError.validation("Invalid URL: \(urlString)")
+        }
+        var request = HTTPClientRequest(url: url.absoluteString)
         request.method = .POST
         addCommonHeaders(to: &request)
         request.headers.add(name: "Prefer", value: "return=representation")
@@ -24,7 +29,8 @@ struct SupabaseRequestBuilder {
     }
 
     func buildFindByIdRequest(tableName: String, id: UUID) -> HTTPClientRequest {
-        var request = HTTPClientRequest(url: "\(supabaseURL)/rest/v1/\(tableName)?id=eq.\(id.uuidString)&select=*")
+        let urlString = "\(supabaseURL)/rest/v1/\(tableName)?id=eq.\(id.uuidString)&select=*"
+        var request = HTTPClientRequest(url: urlString)
         request.method = .GET
         addAuthHeaders(to: &request)
         return request
@@ -84,7 +90,8 @@ struct SupabaseRequestBuilder {
 
     func buildUpdateRequest<T: Encodable>(tableName: String, id: UUID, model: T) throws -> HTTPClientRequest {
         let requestData = try JSONEncoder().encode(model)
-        var request = HTTPClientRequest(url: "\(supabaseURL)/rest/v1/\(tableName)?id=eq.\(id.uuidString)")
+        let urlString = "\(supabaseURL)/rest/v1/\(tableName)?id=eq.\(id.uuidString)"
+        var request = HTTPClientRequest(url: urlString)
         request.method = .PATCH
         addCommonHeaders(to: &request)
         request.headers.add(name: "Prefer", value: "return=representation")

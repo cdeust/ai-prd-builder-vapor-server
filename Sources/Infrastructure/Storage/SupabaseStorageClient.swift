@@ -16,8 +16,9 @@ public final class SupabaseStorageClient: MockupStoragePort {
         bucketName: String = "prd-mockups"
     ) {
         self.httpClient = httpClient
-        self.supabaseURL = supabaseURL.hasSuffix("/") ? String(supabaseURL.dropLast()) : supabaseURL
-        self.apiKey = apiKey
+        let trimmedURL = supabaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.supabaseURL = trimmedURL.hasSuffix("/") ? String(trimmedURL.dropLast()) : trimmedURL
+        self.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         self.bucketName = bucketName
     }
 

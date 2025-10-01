@@ -1,5 +1,7 @@
 import Vapor
 import Domain
+import DomainCore
+import CommonModels
 import Presentation
 
 public final class DomainErrorMiddleware: AsyncMiddleware {

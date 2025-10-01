@@ -1,8 +1,8 @@
 import Foundation
 import Vapor
 import AsyncHTTPClient
-import Domain
 import Infrastructure
+import Domain
 
 /// Factory responsible for creating AI providers based on configuration
 public final class AIProviderFactory {

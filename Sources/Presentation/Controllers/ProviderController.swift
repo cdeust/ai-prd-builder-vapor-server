@@ -113,36 +113,3 @@ public final class ProviderController: RouteCollection, @unchecked Sendable {
         )
     }
 }
-
-// MARK: - Response DTOs
-
-struct CurrentProviderResponseDTO: Content {
-    let name: String
-    let priority: Int
-    let isAvailable: Bool
-    let configuredProvider: String
-}
-
-struct AvailableProviderDTO: Content {
-    let id: String
-    let name: String
-    let description: String
-    let isAvailable: Bool
-    let priority: Int
-    let requiresApiKey: Bool
-    let model: String?
-
-    init(id: String, name: String, description: String, isAvailable: Bool, priority: Int, requiresApiKey: Bool, model: String? = nil) {
-        self.id = id
-        self.name = name
-        self.description = description
-        self.isAvailable = isAvailable
-        self.priority = priority
-        self.requiresApiKey = requiresApiKey
-        self.model = model
-    }
-}
-
-struct AvailableProvidersResponseDTO: Content {
-    let providers: [AvailableProviderDTO]
-}

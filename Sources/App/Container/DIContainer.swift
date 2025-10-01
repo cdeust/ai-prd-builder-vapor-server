@@ -1,13 +1,13 @@
 import Foundation
 import Vapor
 import AsyncHTTPClient
-import Domain
-import Application
 import Infrastructure
 import Presentation
 import CommonModels
 import DomainCore
 import AIProviderImplementations
+import Domain
+import Application
 
 /// Dependency Injection Container for the application
 /// Follows Inversion of Control principle for clean architecture
