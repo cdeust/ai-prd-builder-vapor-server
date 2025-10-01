@@ -245,8 +245,14 @@ public final class DIContainer: @unchecked Sendable {
         )
         register(managementController, for: PRDManagementController.self)
 
+        guard let aiProvider = resolve(AIProviderPort.self) else {
+            throw ConfigurationError.missingDependency("AIProviderPort not found")
+        }
+
         let providerController = ProviderController(
-            aiOrchestrator: aiOrchestrator
+            aiOrchestrator: aiOrchestrator,
+            aiProvider: aiProvider,
+            app: app
         )
         register(providerController, for: ProviderController.self)
 

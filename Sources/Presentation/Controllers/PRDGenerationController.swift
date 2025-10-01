@@ -42,7 +42,7 @@ public final class PRDGenerationController: RouteCollection, @unchecked Sendable
             mockupSources: [],
             priority: Priority(rawValue: dto.priority ?? "medium") ?? .medium,
             requester: requester,
-            metadata: RequestMetadata(),
+            metadata: RequestMetadata(preferredProvider: dto.preferredProvider),
             createdAt: Date(),
             status: .pending
         )

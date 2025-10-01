@@ -37,6 +37,20 @@ public final class AIProviderFactory {
                 return anthropicProvider
             }
 
+        case "openai", "gpt":
+            // Use OpenAI provider
+            if let openAIProvider = createOpenAIProvider() {
+                app.logger.info("🤖 OpenAI provider registered")
+                return openAIProvider
+            }
+
+        case "gemini", "google":
+            // Use Google Gemini provider
+            if let geminiProvider = createGeminiProvider() {
+                app.logger.info("🤖 Google Gemini provider registered")
+                return geminiProvider
+            }
+
         default:
             app.logger.warning("⚠️ Unknown AI_PROVIDER: \(providerType), falling back to native")
             return NativePRDGeneratorProvider()
@@ -50,6 +64,16 @@ public final class AIProviderFactory {
         if let anthropicProvider = createAnthropicProvider() {
             app.logger.info("🤖 Fallback: Direct Anthropic provider registered")
             return anthropicProvider
+        }
+
+        if let openAIProvider = createOpenAIProvider() {
+            app.logger.info("🤖 Fallback: OpenAI provider registered")
+            return openAIProvider
+        }
+
+        if let geminiProvider = createGeminiProvider() {
+            app.logger.info("🤖 Fallback: Google Gemini provider registered")
+            return geminiProvider
         }
 
         // No providers available
@@ -81,9 +105,35 @@ public final class AIProviderFactory {
             return nil
         }
 
-        let model = Environment.get("ANTHROPIC_MODEL") ?? "claude-3-5-sonnet-20241022"
+        let model = Environment.get("ANTHROPIC_MODEL") ?? "claude-sonnet-4-5-20250929"
         return AnthropicProvider(
             apiKey: anthropicKey,
+            httpClient: httpClient,
+            model: model
+        )
+    }
+
+    private func createOpenAIProvider() -> OpenAIProvider? {
+        guard let openAIKey = Environment.get("OPENAI_API_KEY"), !openAIKey.isEmpty else {
+            return nil
+        }
+
+        let model = Environment.get("OPENAI_MODEL") ?? "gpt-5-turbo-2025-01-01"
+        return OpenAIProvider(
+            apiKey: openAIKey,
+            httpClient: httpClient,
+            model: model
+        )
+    }
+
+    private func createGeminiProvider() -> GeminiProvider? {
+        guard let geminiKey = Environment.get("GEMINI_API_KEY"), !geminiKey.isEmpty else {
+            return nil
+        }
+
+        let model = Environment.get("GEMINI_MODEL") ?? "gemini-2.5-pro-latest"
+        return GeminiProvider(
+            apiKey: geminiKey,
             httpClient: httpClient,
             model: model
         )

@@ -7,6 +7,7 @@ public struct CreatePRDRequestDTO: Content {
     public let title: String
     public let description: String
     public let priority: String?
+    public let preferredProvider: String?
     public let requester: RequesterDTO?
 
     public init(
@@ -14,12 +15,14 @@ public struct CreatePRDRequestDTO: Content {
         title: String,
         description: String,
         priority: String? = "medium",
+        preferredProvider: String? = nil,
         requester: RequesterDTO? = nil
     ) {
         self.requestId = requestId
         self.title = title
         self.description = description
         self.priority = priority
+        self.preferredProvider = preferredProvider
         self.requester = requester
     }
 }

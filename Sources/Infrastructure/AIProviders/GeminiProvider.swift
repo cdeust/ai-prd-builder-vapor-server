@@ -12,7 +12,7 @@ public final class GeminiProvider: AIProviderPort {
     private let costCalculator = GeminiCostCalculator()
     private let model: String
 
-    public init(apiKey: String, httpClient: HTTPClient, model: String = "gemini-2.0-flash-exp") {
+    public init(apiKey: String, httpClient: HTTPClient, model: String = "gemini-2.5-pro-latest") {
         self.apiClient = GeminiAPIClient(apiKey: apiKey, httpClient: httpClient)
         self.model = model
     }

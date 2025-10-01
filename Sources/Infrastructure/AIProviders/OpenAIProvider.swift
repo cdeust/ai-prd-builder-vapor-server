@@ -12,7 +12,7 @@ public final class OpenAIProvider: AIProviderPort {
     private let costCalculator = OpenAICostCalculator()
     private let model: String
 
-    public init(apiKey: String, httpClient: HTTPClient, model: String = "gpt-4o-2024-11-20") {
+    public init(apiKey: String, httpClient: HTTPClient, model: String = "gpt-5-turbo-2025-01-01") {
         self.apiClient = OpenAIAPIClient(apiKey: apiKey, httpClient: httpClient)
         self.model = model
     }

@@ -12,7 +12,7 @@ public final class AnthropicProvider: AIProviderPort {
     private let costCalculator = ClaudeCostCalculator()
     private let model: String
 
-    public init(apiKey: String, httpClient: HTTPClient, model: String = "claude-3-5-sonnet-20241022") {
+    public init(apiKey: String, httpClient: HTTPClient, model: String = "claude-sonnet-4-5-20250929") {
         self.apiClient = ClaudeAPIClient(apiKey: apiKey, httpClient: httpClient)
         self.model = model
     }
