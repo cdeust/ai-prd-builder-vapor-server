@@ -64,9 +64,9 @@ public final class AIOrchestratorProvider: AIProviderPort, @unchecked Sendable {
 
     public func analyzeRequirements(_ text: String) async throws -> Domain.RequirementsAnalysis {
         do {
-            let (analysisResponse, _) = try await orchestrator.chat(
-                message: "Analyze the following requirements and identify clarifications needed, assumptions, and gaps: \(text)"
-            )
+            // Use standardized prompt with XML markup for better results
+            let prompt = StandardizedPrompts.buildRequirementsAnalysisPrompt(text)
+            let (analysisResponse, _) = try await orchestrator.chat(message: prompt)
             return try responseParser.parseRequirementsAnalysis(from: analysisResponse)
         } catch {
             throw errorConverter.convert(error)

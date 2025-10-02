@@ -28,8 +28,8 @@ let package = Package(
         // HTTP Client for AI providers
         .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.19.0"),
 
-        // MongoDB Swift Driver
-        .package(url: "https://github.com/mongodb/mongo-swift-driver.git", from: "1.3.1"),
+        // MongoDB Swift Driver (supports mongo-c-driver 2.x via main branch)
+        .package(url: "https://github.com/mongodb/mongo-swift-driver.git", branch: "main"),
 
         // AI Provider SDKs (when available)
         // .package(url: "https://github.com/anthropics/anthropic-sdk-swift.git", from: "1.0.0"),
@@ -50,7 +50,8 @@ let package = Package(
         .target(
             name: "Application",
             dependencies: [
-                "Domain"
+                "Domain",
+                .product(name: "ImplementationAnalysis", package: "swift")
             ]
         ),
 
@@ -69,7 +70,8 @@ let package = Package(
                 .product(name: "Orchestration", package: "swift"),
                 .product(name: "PRDGenerator", package: "swift"),
                 .product(name: "AIProvidersCore", package: "swift"),
-                .product(name: "ThinkingCore", package: "swift")
+                .product(name: "ThinkingCore", package: "swift"),
+                .product(name: "ImplementationAnalysis", package: "swift")
             ]
         ),
 

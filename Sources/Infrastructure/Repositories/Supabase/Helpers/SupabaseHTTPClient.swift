@@ -7,11 +7,17 @@ struct SupabaseHTTPClient {
     private let httpClient: HTTPClient
     private let supabaseURL: String
     private let apiKey: String
+    private let decoder: JSONDecoder
 
     init(httpClient: HTTPClient, supabaseURL: String, apiKey: String) {
         self.httpClient = httpClient
         self.supabaseURL = supabaseURL.hasSuffix("/") ? String(supabaseURL.dropLast()) : supabaseURL
         self.apiKey = apiKey
+
+        // Configure JSON decoder for Supabase date format
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        self.decoder = decoder
     }
 
     func execute<T: Decodable>(_ request: HTTPClientRequest) async throws -> T {
@@ -29,7 +35,7 @@ struct SupabaseHTTPClient {
         let responseBody = try await response.body.collect(upTo: 10 * 1024 * 1024)
         let responseString = String(buffer: responseBody)
         print("[SupabaseHTTPClient] Response body: \(responseString)")
-        return try JSONDecoder().decode(T.self, from: responseBody)
+        return try decoder.decode(T.self, from: responseBody)
     }
 
     func executeDelete(_ request: HTTPClientRequest) async throws {

@@ -8,6 +8,7 @@ import Presentation
 import CommonModels
 import DomainCore
 import AIProviderImplementations
+import ImplementationAnalysis
 
 /// Dependency Injection Container for the application
 /// Follows Inversion of Control principle for clean architecture
@@ -58,6 +59,11 @@ public final class DIContainer: @unchecked Sendable {
         let mockupUploadRepository = try databaseFactory.createMockupUploadRepository()
         register(mockupUploadRepository, for: MockupUploadRepositoryProtocol.self)
 
+        // Register codebase repository
+        let codebaseRepository = try createCodebaseRepository()
+        register(codebaseRepository, for: CodebaseRepositoryProtocol.self)
+
+
         // Register AI provider using factory
         let aiProvider = try aiProviderFactory.createProvider()
         register(aiProvider, for: AIProviderPort.self)
@@ -73,7 +79,16 @@ public final class DIContainer: @unchecked Sendable {
 
         let appleIntelligenceClient = try createAppleIntelligenceClient()
         register(appleIntelligenceClient, for: MockupAnalysisPort.self)
+
+        // Register GitHub parser with AsyncHTTPClient
+        let githubParser = GitHubTreeParser(httpClient: app.http.client.shared)
+        register(githubParser, for: GitHubTreeParser.self)
+
+        // PRD-Codebase link repository (persistent Supabase implementation)
+        let prdCodebaseLinkRepo = try createPRDCodebaseLinkRepository()
+        register(prdCodebaseLinkRepo, for: PRDCodebaseLink.self)
     }
+
 
     private func createStorageClient() throws -> MockupStoragePort {
         guard let httpClient = resolve(HTTPClient.self) else {
@@ -94,6 +109,48 @@ public final class DIContainer: @unchecked Sendable {
             supabaseURL: supabaseURL,
             apiKey: supabaseKey,
             bucketName: "prd-mockups"
+        )
+    }
+
+    private func createCodebaseRepository() throws -> CodebaseRepositoryProtocol {
+        guard let httpClient = resolve(HTTPClient.self) else {
+            throw ConfigurationError.missingDependency("HTTPClient not found")
+        }
+
+        guard let supabaseURL = Environment.get("SUPABASE_URL") else {
+            throw ConfigurationError.missingEnvironmentVariable("SUPABASE_URL")
+        }
+
+        guard let supabaseKey = Environment.get("SUPABASE_SERVICE_ROLE_KEY") ?? Environment.get("SUPABASE_ANON_KEY") else {
+            throw ConfigurationError.missingEnvironmentVariable("SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY")
+        }
+
+        return SupabaseCodebaseRepository(
+            httpClient: httpClient,
+            supabaseURL: supabaseURL,
+            apiKey: supabaseKey,
+            logger: app.logger
+        )
+    }
+
+    private func createPRDCodebaseLinkRepository() throws -> PRDCodebaseLink {
+        guard let httpClient = resolve(HTTPClient.self) else {
+            throw ConfigurationError.missingDependency("HTTPClient not found")
+        }
+
+        guard let supabaseURL = Environment.get("SUPABASE_URL") else {
+            throw ConfigurationError.missingEnvironmentVariable("SUPABASE_URL")
+        }
+
+        guard let supabaseKey = Environment.get("SUPABASE_SERVICE_ROLE_KEY") ?? Environment.get("SUPABASE_ANON_KEY") else {
+            throw ConfigurationError.missingEnvironmentVariable("SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY")
+        }
+
+        return SupabasePRDCodebaseLinkRepository(
+            httpClient: httpClient,
+            supabaseURL: supabaseURL,
+            apiKey: supabaseKey,
+            logger: app.logger
         )
     }
 
@@ -161,7 +218,7 @@ public final class DIContainer: @unchecked Sendable {
             // Default to Apple Intelligence if available, otherwise Anthropic
             #if canImport(FoundationModels)
             if #available(macOS 16.0, iOS 18.0, *) {
-                app.logger.info("🍎 Unknown provider '\(providerType)', defaulting to Apple Intelligence")
+                app.logger.info("🍎 Unknown provider '\(providerType ?? "nil")', defaulting to Apple Intelligence")
                 return AIProviderImplementations.AppleProvider(mode: .hybrid)
             }
             #endif
@@ -179,20 +236,66 @@ public final class DIContainer: @unchecked Sendable {
     private func registerApplicationServices() throws {
         guard let aiProvider = resolve(AIProviderPort.self),
               let prdRepository = resolve(PRDRepositoryProtocol.self),
-              let documentRepository = resolve(PRDDocumentRepositoryProtocol.self) else {
+              let documentRepository = resolve(PRDDocumentRepositoryProtocol.self),
+              let codebaseRepository = resolve(CodebaseRepositoryProtocol.self) else {
             throw ConfigurationError.missingDependency("Required repositories or AI provider not found")
         }
 
-        // Use cases
+        // PRD Use cases
+        // Resolve optional codebase dependencies for PRD generation
+        let prdCodebaseLink = resolve(PRDCodebaseLink.self)
+        let githubParser = resolve(GitHubTreeParser.self)
+
         let generatePRDUseCase = GeneratePRDUseCase(
             aiProvider: aiProvider,
             prdRepository: prdRepository,
-            documentRepository: documentRepository
+            documentRepository: documentRepository,
+            prdCodebaseLink: prdCodebaseLink,
+            codebaseRepository: codebaseRepository,
+            githubParser: githubParser
         )
         register(generatePRDUseCase, for: GeneratePRDUseCase.self)
 
         let analyzeRequirementsUseCase = AnalyzeRequirementsUseCase(aiProvider: aiProvider)
         register(analyzeRequirementsUseCase, for: AnalyzeRequirementsUseCase.self)
+
+        // Codebase Use cases
+        let createCodebaseUseCase = CreateCodebaseUseCase(
+            repository: codebaseRepository,
+            embeddingGenerator: PlaceholderEmbeddingGenerator()
+        )
+        register(createCodebaseUseCase, for: CreateCodebaseUseCase.self)
+
+        let getCodebaseUseCase = GetCodebaseUseCase(repository: codebaseRepository)
+        register(getCodebaseUseCase, for: GetCodebaseUseCase.self)
+
+        let listCodebasesUseCase = ListCodebasesUseCase(repository: codebaseRepository)
+        register(listCodebasesUseCase, for: ListCodebasesUseCase.self)
+
+        // GitHub indexing use case
+        guard let githubParser = resolve(GitHubTreeParser.self) else {
+            throw ConfigurationError.missingDependency("GitHubTreeParser not found")
+        }
+
+        // Create embedding generator (OpenAI or placeholder)
+        let embeddingGenerator: EmbeddingGeneratorPort
+        if let openAIKey = Environment.get("OPENAI_API_KEY"), !openAIKey.isEmpty {
+            embeddingGenerator = OpenAIEmbeddingGenerator(
+                httpClient: app.http.client.shared,
+                apiKey: openAIKey
+            )
+            app.logger.info("✅ Using OpenAI for embeddings")
+        } else {
+            embeddingGenerator = PlaceholderEmbeddingGenerator()
+            app.logger.warning("⚠️ No OPENAI_API_KEY found, using placeholder embeddings")
+        }
+
+        let indexGitHubUseCase = IndexGitHubUseCase(
+            codebaseRepository: codebaseRepository,
+            githubParser: githubParser,
+            embeddingGenerator: embeddingGenerator
+        )
+        register(indexGitHubUseCase, for: IndexGitHubUseCase.self)
 
         // Application services
         let prdApplicationService = PRDApplicationService(
@@ -258,7 +361,10 @@ public final class DIContainer: @unchecked Sendable {
 
         let webSocketController = PRDWebSocketController(
             applicationService: applicationService,
-            aiOrchestrator: aiOrchestrator
+            aiOrchestrator: aiOrchestrator,
+            prdCodebaseLink: resolve(PRDCodebaseLink.self),
+            codebaseRepository: resolve(CodebaseRepositoryProtocol.self),
+            githubParser: resolve(GitHubTreeParser.self)
         )
         register(webSocketController, for: PRDWebSocketController.self)
 
@@ -274,12 +380,77 @@ public final class DIContainer: @unchecked Sendable {
         )
         register(mockupController, for: MockupController.self)
 
-        if aiOrchestrator != nil {
-            app.logger.info("🎛️ PRD Controllers configured with AI Orchestrator integration")
-        } else {
-            app.logger.info("⚠️ PRD Controllers configured without AI Orchestrator (fallback mode)")
+        // Codebase controller
+        guard let createCodebaseUseCase = resolve(CreateCodebaseUseCase.self),
+              let getCodebaseUseCase = resolve(GetCodebaseUseCase.self),
+              let listCodebasesUseCase = resolve(ListCodebasesUseCase.self),
+              let indexGitHubUseCase = resolve(IndexGitHubUseCase.self),
+              let githubParser = resolve(GitHubTreeParser.self) else {
+            app.logger.warning("Codebase use cases or GitHub parser not registered - CodebaseController will not be available")
+            return
         }
 
-        app.logger.info("📸 Mockup Controller configured with storage and analysis services")
+        guard let codebaseRepository = resolve(CodebaseRepositoryProtocol.self) else {
+            app.logger.warning("Codebase repository not found")
+            return
+        }
+
+        // Reuse the embedding generator from application services
+        let embeddingGenerator: EmbeddingGeneratorPort
+        if let openAIKey = Environment.get("OPENAI_API_KEY"), !openAIKey.isEmpty {
+            embeddingGenerator = OpenAIEmbeddingGenerator(
+                httpClient: app.http.client.shared,
+                apiKey: openAIKey
+            )
+        } else {
+            embeddingGenerator = PlaceholderEmbeddingGenerator()
+        }
+
+        let addFileUseCase = AddFileToCodebaseUseCase(
+            repository: codebaseRepository,
+            embeddingGenerator: embeddingGenerator
+        )
+
+        let searchCodebaseUseCase = SearchCodebaseUseCase(
+            repository: codebaseRepository,
+            embeddingGenerator: embeddingGenerator
+        )
+
+        // Reuse the registered persistent PRD link repository
+        guard let prdLinkRepository = resolve(PRDCodebaseLink.self) else {
+            app.logger.warning("PRDCodebaseLink not found - CodebaseController may not work properly")
+            return
+        }
+        let linkCodebaseUseCase = LinkCodebaseToPRDUseCase(repository: prdLinkRepository)
+
+        let codebaseController = CodebaseController(
+            createCodebaseUseCase: createCodebaseUseCase,
+            getCodebaseUseCase: getCodebaseUseCase,
+            listCodebasesUseCase: listCodebasesUseCase,
+            indexGitHubUseCase: indexGitHubUseCase,
+            addFileUseCase: addFileUseCase,
+            searchCodebaseUseCase: searchCodebaseUseCase,
+            linkCodebaseUseCase: linkCodebaseUseCase,
+            githubParser: githubParser
+        )
+        register(codebaseController, for: CodebaseController.self)
     }
 }
+
+// MARK: - Placeholder Implementations
+
+/// Placeholder embedding generator until OpenAI service is implemented
+private final class PlaceholderEmbeddingGenerator: EmbeddingGeneratorPort, @unchecked Sendable {
+    var embeddingDimension: Int { 1536 }
+    var modelName: String { "placeholder" }
+
+    func generateEmbedding(text: String) async throws -> [Float] {
+        // Return zero vector for now
+        return Array(repeating: 0.0, count: 1536)
+    }
+
+    func generateEmbeddings(texts: [String]) async throws -> [[Float]] {
+        return texts.map { _ in Array(repeating: 0.0, count: 1536) }
+    }
+}
+

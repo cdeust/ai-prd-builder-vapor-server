@@ -2,14 +2,27 @@ import Vapor
 import Domain
 import Application
 import Infrastructure
+import ImplementationAnalysis
 
 public final class PRDWebSocketController: RouteCollection, @unchecked Sendable {
     private let applicationService: PRDApplicationService
     private let aiOrchestrator: AIOrchestratorProvider?
+    private let prdCodebaseLink: PRDCodebaseLink?
+    private let codebaseRepository: CodebaseRepositoryProtocol?
+    private let githubParser: GitHubTreeParser?
 
-    public init(applicationService: PRDApplicationService, aiOrchestrator: AIOrchestratorProvider?) {
+    public init(
+        applicationService: PRDApplicationService,
+        aiOrchestrator: AIOrchestratorProvider?,
+        prdCodebaseLink: PRDCodebaseLink? = nil,
+        codebaseRepository: CodebaseRepositoryProtocol? = nil,
+        githubParser: GitHubTreeParser? = nil
+    ) {
         self.applicationService = applicationService
         self.aiOrchestrator = aiOrchestrator
+        self.prdCodebaseLink = prdCodebaseLink
+        self.codebaseRepository = codebaseRepository
+        self.githubParser = githubParser
     }
 
     public func boot(routes: RoutesBuilder) throws {
@@ -30,7 +43,8 @@ public final class PRDWebSocketController: RouteCollection, @unchecked Sendable 
     }
 
     func handleInteractiveWebSocket(req: Request, ws: WebSocket) async {
-        guard let requestId = extractRequestId(from: req) else {
+        // Extract session ID from URL (may be PRD request ID or a random session ID)
+        guard let sessionId = extractRequestId(from: req) else {
             _ = try? await ws.close(code: .policyViolation)
             return
         }
@@ -42,8 +56,8 @@ public final class PRDWebSocketController: RouteCollection, @unchecked Sendable 
         }
 
         let stateHandler = WebSocketStateHandler()
-        setupInteractiveWebSocketHandler(ws: ws, orchestrator: orchestrator, stateHandler: stateHandler, requestId: requestId)
-        try? await ws.send("Interactive PRD generation ready for request \(requestId). Send 'start_generation' message to begin.")
+        setupInteractiveWebSocketHandler(ws: ws, orchestrator: orchestrator, stateHandler: stateHandler, sessionId: sessionId)
+        try? await ws.send("Interactive PRD generation ready. Send 'start_generation' message with prdRequestId to begin.")
     }
 
     private func extractRequestId(from req: Request) -> UUID? {
@@ -88,18 +102,28 @@ public final class PRDWebSocketController: RouteCollection, @unchecked Sendable 
         ws: WebSocket,
         orchestrator: AIOrchestratorProvider,
         stateHandler: WebSocketStateHandler,
-        requestId: UUID
+        sessionId: UUID
     ) {
         ws.onText { ws, text in
             guard let data = text.data(using: .utf8),
                   let message = try? JSONDecoder().decode(InteractiveMessage.self, from: data) else {
-                print("Invalid WebSocket message for request \(requestId)")
+                print("Invalid WebSocket message for session \(sessionId)")
                 return
             }
 
             switch message.type {
             case "start_generation":
-                self.handleStartGeneration(ws: ws, message: message, orchestrator: orchestrator, stateHandler: stateHandler)
+                // Extract PRD request ID from message or fall back to session ID
+                let prdRequestId: UUID
+                if let prdIdString = message.prdRequestId,
+                   let prdId = UUID(uuidString: prdIdString) {
+                    prdRequestId = prdId
+                    print("[WebSocket] Using PRD request ID from message: \(prdRequestId)")
+                } else {
+                    prdRequestId = sessionId
+                    print("[WebSocket] Using session ID as PRD request ID: \(prdRequestId)")
+                }
+                self.handleStartGeneration(ws: ws, message: message, orchestrator: orchestrator, stateHandler: stateHandler, requestId: prdRequestId)
             case "clarification_answers":
                 self.handleClarificationAnswers(message: message, stateHandler: stateHandler)
             default:
@@ -112,10 +136,31 @@ public final class PRDWebSocketController: RouteCollection, @unchecked Sendable 
         ws: WebSocket,
         message: InteractiveMessage,
         orchestrator: AIOrchestratorProvider,
-        stateHandler: WebSocketStateHandler
+        stateHandler: WebSocketStateHandler,
+        requestId: UUID
     ) {
         Task {
             do {
+                // Try to fetch codebase context using the provided request ID
+                var codebaseContext = await fetchCodebaseContext(for: requestId)
+                var actualPRDRequestId = requestId
+
+                // If no codebase found and we have a title, try to find the actual PRD request
+                if codebaseContext == nil, let title = message.title {
+                    print("[WebSocket] 🔍 No codebase for session ID, searching for PRD by title: \(title)")
+                    if let foundPRDId = await findRecentPRDByTitle(title) {
+                        print("[WebSocket] ✅ Found PRD request by title: \(foundPRDId)")
+                        actualPRDRequestId = foundPRDId
+                        codebaseContext = await fetchCodebaseContext(for: foundPRDId)
+                    }
+                }
+
+                if let context = codebaseContext {
+                    print("[WebSocket] ✅ Found linked codebase: \(context.repositoryUrl) with \(context.techStack.languages.count) languages")
+                } else {
+                    print("[WebSocket] ⚠️ No codebase linked to PRD request: \(actualPRDRequestId)")
+                }
+
                 let command: GeneratePRDCommand
 
                 if let existingCommand = message.generateCommand {
@@ -123,9 +168,11 @@ public final class PRDWebSocketController: RouteCollection, @unchecked Sendable 
                 } else if let title = message.title, let description = message.description {
                     let priority = Priority(rawValue: message.priority ?? "medium") ?? .medium
                     command = GeneratePRDCommand(
+                        requestId: actualPRDRequestId,  // ✅ Use the actual PRD ID we found!
                         title: title,
                         description: description,
-                        priority: priority
+                        priority: priority,
+                        codebaseContext: codebaseContext  // ✅ Include codebase context!
                     )
                 } else {
                     try? await ws.send("""
@@ -329,5 +376,82 @@ public final class PRDWebSocketController: RouteCollection, @unchecked Sendable 
         )
 
         await sendGenerationComplete(ws: ws, result: prdResult)
+    }
+
+    /// Find a recently created PRD request by title (within last 60 seconds)
+    private func findRecentPRDByTitle(_ title: String) async -> UUID? {
+        do {
+            // Get recent pending PRDs from repository
+            let repository = applicationService.getPRDRepository()
+            let recentPRDs = try await repository.findByStatus(.pending)
+
+            // Find the most recent PRD with matching title (case-insensitive, trimmed)
+            let normalizedTitle = title.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).lowercased()
+
+            for prd in recentPRDs {
+                let prdTitle = prd.title.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).lowercased()
+                if prdTitle == normalizedTitle || prdTitle.contains(normalizedTitle) || normalizedTitle.contains(prdTitle) {
+                    // Check if created within last 60 seconds
+                    let timeSinceCreation = Date().timeIntervalSince(prd.createdAt)
+                    if timeSinceCreation < 60 {
+                        return prd.id
+                    }
+                }
+            }
+
+            return nil
+        } catch {
+            print("[WebSocket] ❌ Error searching for PRD by title: \(error)")
+            return nil
+        }
+    }
+
+    /// Fetch codebase context for a PRD request if linked
+    private func fetchCodebaseContext(for prdRequestId: UUID) async -> CodebaseContext? {
+        guard let prdCodebaseLink = prdCodebaseLink,
+              codebaseRepository != nil,
+              githubParser != nil else {
+            return nil
+        }
+
+        do {
+            guard let linkedCodebase = try await prdCodebaseLink.getCodebaseForPRD(prdRequestId: prdRequestId) else {
+                return nil
+            }
+
+            // Build tech stack info
+            let techStack = TechStackInfo(
+                languages: linkedCodebase.detectedLanguages,
+                frameworks: linkedCodebase.detectedFrameworks,
+                architecturePatterns: linkedCodebase.architecturePatterns.map { $0.name }
+            )
+
+            // Build summary from tech stack
+            let languagesSummary = techStack.languages.map { "\($0.key)" }.joined(separator: ", ")
+            let frameworksSummary = techStack.frameworks.isEmpty ? "No frameworks detected" : techStack.frameworks.joined(separator: ", ")
+            let summary = """
+            Repository: \(linkedCodebase.repositoryUrl)
+            Languages: \(languagesSummary)
+            Frameworks: \(frameworksSummary)
+            Total Files: \(linkedCodebase.totalFiles)
+            Architecture: \(techStack.architecturePatterns.joined(separator: ", "))
+            """
+
+            // For now, we'll include minimal file context to avoid token limits
+            // In the future, this could be enhanced with semantic search
+            let relevantFiles: [CodeFileContext] = []
+
+            return CodebaseContext(
+                projectId: linkedCodebase.id,
+                repositoryUrl: linkedCodebase.repositoryUrl,
+                repositoryBranch: linkedCodebase.repositoryBranch,
+                summary: summary,
+                relevantFiles: relevantFiles,
+                techStack: techStack
+            )
+        } catch {
+            print("[WebSocket] ❌ Error fetching codebase context: \(error)")
+            return nil
+        }
     }
 }

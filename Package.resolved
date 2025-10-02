@@ -1,5 +1,5 @@
 {
-  "originHash" : "76eabfa43229572740fcab1360e8f926611b4b06ed0b25520857a6e264c97505",
+  "originHash" : "a5f8e6c5a30736d5fb4112c27085b3165339ee035e0c6c74a67c500949e766f0",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -123,8 +123,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/mongodb/mongo-swift-driver.git",
       "state" : {
-        "revision" : "cd8618a10f89b72bad6edb1066a8fb60df57811b",
-        "version" : "1.3.1"
+        "branch" : "main",
+        "revision" : "1f62248482bccd5a0f67c46793828674f9057d9d"
       }
     },
     {

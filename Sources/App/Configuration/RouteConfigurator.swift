@@ -67,7 +67,13 @@ public final class RouteConfigurator {
         try app.register(collection: webSocketController)
         try app.register(collection: mockupController)
 
-        // Register new PRDGenerator WebSocket route with streaming
+        // Register codebase controller if available
+        if let codebaseController = app.diContainer.resolve(CodebaseController.self) {
+            try app.register(collection: codebaseController)
+        } else {
+            app.logger.warning("CodebaseController not available - codebase routes will not be registered")
+        }
+
         registerPRDGeneratorWebSocket()
     }
 

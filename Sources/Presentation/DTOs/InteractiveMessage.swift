@@ -15,6 +15,7 @@ public struct InteractiveMessage: Content {
     public let title: String?
     public let description: String?
     public let priority: String?
+    public let prdRequestId: String?
 
     public init(
         type: String,
@@ -26,7 +27,8 @@ public struct InteractiveMessage: Content {
         section: SectionUpdate? = nil,
         title: String? = nil,
         description: String? = nil,
-        priority: String? = nil
+        priority: String? = nil,
+        prdRequestId: String? = nil
     ) {
         self.type = type
         self.message = message
@@ -38,6 +40,7 @@ public struct InteractiveMessage: Content {
         self.title = title
         self.description = description
         self.priority = priority
+        self.prdRequestId = prdRequestId
     }
 }
 

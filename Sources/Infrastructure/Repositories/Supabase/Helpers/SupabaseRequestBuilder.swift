@@ -14,7 +14,9 @@ struct SupabaseRequestBuilder {
     }
 
     func buildInsertRequest<T: Encodable>(tableName: String, model: T) throws -> HTTPClientRequest {
-        let requestData = try JSONEncoder().encode(model)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let requestData = try encoder.encode(model)
         var request = HTTPClientRequest(url: "\(supabaseURL)/rest/v1/\(tableName)")
         request.method = .POST
         addCommonHeaders(to: &request)
@@ -83,7 +85,9 @@ struct SupabaseRequestBuilder {
     }
 
     func buildUpdateRequest<T: Encodable>(tableName: String, id: UUID, model: T) throws -> HTTPClientRequest {
-        let requestData = try JSONEncoder().encode(model)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let requestData = try encoder.encode(model)
         var request = HTTPClientRequest(url: "\(supabaseURL)/rest/v1/\(tableName)?id=eq.\(id.uuidString)")
         request.method = .PATCH
         addCommonHeaders(to: &request)

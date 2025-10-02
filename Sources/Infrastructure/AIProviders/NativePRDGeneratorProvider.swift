@@ -46,7 +46,13 @@ public final class NativePRDGeneratorProvider: AIProviderPort {
 
         self.prdGenerator = generator
 
-        let document = try await generator.generatePRD(from: command.description)
+        // Enrich description with codebase context if available
+        let enrichedDescription = buildEnrichedDescription(
+            baseDescription: command.description,
+            codebaseContext: command.codebaseContext
+        )
+
+        let document = try await generator.generatePRD(from: enrichedDescription)
 
         return try await mapToDomainResult(document)
     }
@@ -201,6 +207,81 @@ public final class NativePRDGeneratorProvider: AIProviderPort {
         } else {
             return "appendix"
         }
+    }
+
+    /// Build enriched description with codebase context
+    private func buildEnrichedDescription(
+        baseDescription: String,
+        codebaseContext: CodebaseContext?
+    ) -> String {
+        guard let context = codebaseContext else {
+            return baseDescription
+        }
+
+        var enrichedParts: [String] = [baseDescription]
+
+        // Add codebase header
+        enrichedParts.append("""
+
+        ## Codebase Context
+
+        This PRD should be aligned with an existing codebase:
+
+        **Repository:** \(context.repositoryUrl) (branch: \(context.repositoryBranch))
+        **Project ID:** \(context.projectId)
+        **Summary:** \(context.summary)
+        """)
+
+        // Add tech stack info
+        if !context.techStack.languages.isEmpty {
+            let languagesText = context.techStack.languages
+                .sorted { $0.value > $1.value }
+                .map { "\($0.key) (\($0.value)%)" }
+                .joined(separator: ", ")
+
+            enrichedParts.append("""
+
+            **Tech Stack:**
+            - Languages: \(languagesText)
+            """)
+
+            if !context.techStack.frameworks.isEmpty {
+                enrichedParts.append("- Frameworks: \(context.techStack.frameworks.joined(separator: ", "))")
+            }
+
+            if !context.techStack.architecturePatterns.isEmpty {
+                enrichedParts.append("- Architecture: \(context.techStack.architecturePatterns.joined(separator: ", "))")
+            }
+        }
+
+        // Add relevant files
+        if !context.relevantFiles.isEmpty {
+            enrichedParts.append("\n**Relevant Code Files:**\n")
+
+            for file in context.relevantFiles {
+                enrichedParts.append("""
+
+                ### \(file.filePath)
+                **Purpose:** \(file.purpose)
+                \(file.language.map { "**Language:** \($0)" } ?? "")
+
+                ```\(file.language?.lowercased() ?? "")
+                \(file.excerpt)
+                ```
+                """)
+            }
+        }
+
+        enrichedParts.append("""
+
+        ---
+
+        **IMPORTANT:** The PRD should be designed to integrate with or extend the existing codebase above.
+        Consider the current architecture, tech stack, and coding patterns when proposing solutions.
+        Ensure technical requirements align with the existing technologies and frameworks.
+        """)
+
+        return enrichedParts.joined(separator: "\n")
     }
 
 }
