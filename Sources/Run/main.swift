@@ -35,7 +35,7 @@ func loadEnvironmentFile() {
                 let key = parts[0].trimmingCharacters(in: .whitespaces)
                 let value = parts[1...].joined(separator: "=").trimmingCharacters(in: .whitespaces)
 
-                setenv(key, value, 0) // Don't overwrite existing env vars
+                setenv(key, value, 1) // Allow overwriting env vars from .env file
             }
             return // Successfully loaded, exit
         }

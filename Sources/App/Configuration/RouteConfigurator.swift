@@ -74,6 +74,21 @@ public final class RouteConfigurator {
             app.logger.warning("CodebaseController not available - codebase routes will not be registered")
         }
 
+        // Register GitHub auth controller if OAuth is configured
+        if let githubAuthController = app.diContainer.resolve(GitHubAuthController.self) {
+            try app.register(collection: githubAuthController)
+        } else {
+            app.logger.info("GitHubAuthController not available - GitHub OAuth routes will not be registered")
+        }
+
+        // Register diagnostics controller
+        if let diagnosticsController = app.diContainer.resolve(DiagnosticsController.self) {
+            try app.register(collection: diagnosticsController)
+            app.logger.info("✅ Diagnostics routes registered at /api/v1/diagnostics")
+        } else {
+            app.logger.warning("DiagnosticsController not available")
+        }
+
         registerPRDGeneratorWebSocket()
     }
 

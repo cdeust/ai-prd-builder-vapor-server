@@ -15,6 +15,7 @@ public final class CodebaseController: RouteCollection, @unchecked Sendable {
     private let searchCodebaseUseCase: SearchCodebaseUseCase
     private let linkCodebaseUseCase: LinkCodebaseToPRDUseCase
     private let githubParser: GitHubTreeParser
+    private let defaultGitHubToken: String?
 
     public init(
         createCodebaseUseCase: CreateCodebaseUseCase,
@@ -24,7 +25,8 @@ public final class CodebaseController: RouteCollection, @unchecked Sendable {
         addFileUseCase: AddFileToCodebaseUseCase,
         searchCodebaseUseCase: SearchCodebaseUseCase,
         linkCodebaseUseCase: LinkCodebaseToPRDUseCase,
-        githubParser: GitHubTreeParser
+        githubParser: GitHubTreeParser,
+        defaultGitHubToken: String? = nil
     ) {
         self.createCodebaseUseCase = createCodebaseUseCase
         self.getCodebaseUseCase = getCodebaseUseCase
@@ -34,6 +36,7 @@ public final class CodebaseController: RouteCollection, @unchecked Sendable {
         self.searchCodebaseUseCase = searchCodebaseUseCase
         self.linkCodebaseUseCase = linkCodebaseUseCase
         self.githubParser = githubParser
+        self.defaultGitHubToken = defaultGitHubToken
     }
 
     public func boot(routes: RoutesBuilder) throws {
@@ -277,11 +280,23 @@ public final class CodebaseController: RouteCollection, @unchecked Sendable {
 
         req.logger.info("🔍 Starting GitHub indexing for: \(dto.repositoryUrl)")
 
+        // Determine access token priority:
+        // 1. Request body (user-provided)
+        // 2. Session (OAuth authenticated)
+        // 3. Environment variable (server default)
+        let accessToken = dto.accessToken
+            ?? req.githubAccessToken
+            ?? defaultGitHubToken
+
+        if accessToken == nil {
+            req.logger.warning("⚠️ No GitHub access token provided. API rate limit will be restricted to 60 requests/hour.")
+        }
+
         do {
             let input = IndexGitHubUseCase.Input(
                 repositoryUrl: dto.repositoryUrl,
                 branch: dto.branch ?? "main",
-                accessToken: dto.accessToken,
+                accessToken: accessToken,
                 userId: UUID() // TODO: Extract from authenticated user
             )
 

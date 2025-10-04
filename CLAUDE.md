@@ -268,4 +268,17 @@ Automatically activate thinking modes when detecting:
 
 ---
 
+## 8) Interoperability checks
+
+- **Do not** create new files if there is already partial implementation found
+- **Prefer refactoring** to creation of new files
+- **Keep controllers skinny**; if you need branching, that's a use-case concern
+- **No "god" types named Utils/Helpers/Managers**
+- **Time, randomness, I/O are injectable ports** to keep tests deterministic
+- **Use property wrappers** (@Environment, @Dependency) sparingly; prefer explicit injection
+- **Verify against ai-prd-builder-web** This is the web front-end using the features or db access
+- **Verify against ai-prd-builder** This is the library that is making call to LLM and making all the logic behind PRD Generation 
+
+---
+
 > If any code conflicts with this file, prefer **CLAUDE.md** and open an ADR to explain exceptions.

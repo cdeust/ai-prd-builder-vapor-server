@@ -15,7 +15,7 @@ public final class AIOrchestratorProvider: AIProviderPort, @unchecked Sendable {
     private let orchestrator: Orchestrator
     private let providerCoordinator: AIProviderCoordinator
     private let configuration: Configuration
-    private var prdGenerator: PRDGenerator?
+    private var prdGenerator: PRDGeneratorService?
 
     private let inputBuilder = PRDInputBuilder()
     private let responseParser = ResponseParser()
@@ -42,7 +42,10 @@ public final class AIOrchestratorProvider: AIProviderPort, @unchecked Sendable {
         }
     }
 
-    public func generatePRD(from request: GeneratePRDCommand) async throws -> PRDGenerationResult {
+    public func generatePRD(
+        from request: GeneratePRDCommand,
+        contextRequestPort: ContextRequestPort? = nil
+    ) async throws -> PRDGenerationResult {
         let startTime = Date()
         let generator = try await getOrCreatePRDGenerator(preferredProvider: request.preferredProvider)
 
@@ -164,7 +167,7 @@ public final class AIOrchestratorProvider: AIProviderPort, @unchecked Sendable {
         progressHandler: (@Sendable (String) async -> Void)? = nil,
         sectionHandler: (@Sendable (String, String, Int) async -> Void)? = nil,
         clarificationHandler: (([String]) async throws -> [String])? = nil
-    ) async throws -> PRDGenerator {
+    ) async throws -> PRDGeneratorService {
         if let preferredProvider = preferredProvider {
             _ = providerCoordinator.switchProvider(to: preferredProvider)
         }
@@ -194,7 +197,7 @@ public final class AIOrchestratorProvider: AIProviderPort, @unchecked Sendable {
         }
 
         print("[AIOrchestratorProvider] Creating PRDGenerator with handler: \(interactionHandler != nil ? "YES" : "NO")")
-        let generator = PRDGenerator(
+        let generator = PRDGeneratorService(
             provider: selectedProvider,
             configuration: configuration,
             interactionHandler: interactionHandler

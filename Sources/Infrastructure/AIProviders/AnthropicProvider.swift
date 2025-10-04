@@ -1,6 +1,7 @@
 import Foundation
 import AsyncHTTPClient
 import Domain
+import PRDGenerator
 
 public final class AnthropicProvider: AIProviderPort {
     public let name: String = "anthropic"
@@ -23,7 +24,10 @@ public final class AnthropicProvider: AIProviderPort {
         }
     }
 
-    public func generatePRD(from request: GeneratePRDCommand) async throws -> PRDGenerationResult {
+    public func generatePRD(
+        from request: GeneratePRDCommand,
+        contextRequestPort: ContextRequestPort? = nil
+    ) async throws -> PRDGenerationResult {
         let startTime = Date()
 
         let prompt = promptBuilder.buildPRDPrompt(request)

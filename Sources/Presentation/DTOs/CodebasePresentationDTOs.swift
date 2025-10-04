@@ -2,6 +2,11 @@ import Vapor
 import Foundation
 import Application
 
+// Import specific DTOs from Application layer
+import struct Application.LinkCodebaseDTO
+import struct Application.LinkMultipleCodebasesDTO
+import struct Application.LinkMultipleCodebasesResponseDTO
+
 // MARK: - Presentation Layer DTOs (Vapor Content Conformance)
 
 extension CreateCodebaseDTO: Content, @unchecked Sendable {}

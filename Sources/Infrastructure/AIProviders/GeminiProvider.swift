@@ -1,6 +1,7 @@
 import Foundation
 import AsyncHTTPClient
 import Domain
+import PRDGenerator
 
 public final class GeminiProvider: AIProviderPort {
     public let name: String = "gemini"
@@ -23,7 +24,10 @@ public final class GeminiProvider: AIProviderPort {
         }
     }
 
-    public func generatePRD(from request: GeneratePRDCommand) async throws -> PRDGenerationResult {
+    public func generatePRD(
+        from request: GeneratePRDCommand,
+        contextRequestPort: ContextRequestPort? = nil
+    ) async throws -> PRDGenerationResult {
         let startTime = Date()
 
         let prompt = promptBuilder.buildPRDPrompt(request)

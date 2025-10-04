@@ -24,7 +24,7 @@ public final class AppleIntelligenceClient: MockupAnalysisPort, @unchecked Senda
     public func analyzeMockup(
         imageURL: String,
         context: MockupAnalysisContext
-    ) async throws -> (result: MockupAnalysisResult, confidence: Double) {
+    ) async throws -> (result: Domain.MockupAnalysisResult, confidence: Double) {
         let prompt = buildAnalysisPrompt(context: context, imageURL: imageURL)
         let response = try await sendAnalysisRequest(prompt: prompt)
         return try parseAnalysisResponse(response)
@@ -33,8 +33,8 @@ public final class AppleIntelligenceClient: MockupAnalysisPort, @unchecked Senda
     public func analyzeMockups(
         imageURLs: [String],
         context: MockupAnalysisContext
-    ) async throws -> [(result: MockupAnalysisResult, confidence: Double)] {
-        var results: [(result: MockupAnalysisResult, confidence: Double)] = []
+    ) async throws -> [(result: Domain.MockupAnalysisResult, confidence: Double)] {
+        var results: [(result: Domain.MockupAnalysisResult, confidence: Double)] = []
 
         for imageURL in imageURLs {
             let result = try await analyzeMockup(imageURL: imageURL, context: context)
@@ -135,7 +135,7 @@ public final class AppleIntelligenceClient: MockupAnalysisPort, @unchecked Senda
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func parseAnalysisResponse(_ response: VisionAnalysisResponse) throws -> (result: MockupAnalysisResult, confidence: Double) {
+    private func parseAnalysisResponse(_ response: VisionAnalysisResponse) throws -> (result: Domain.MockupAnalysisResult, confidence: Double) {
         let uiElements = response.uiElements.map { element in
             UIElement(
                 type: UIElementType(rawValue: element.type) ?? .other,

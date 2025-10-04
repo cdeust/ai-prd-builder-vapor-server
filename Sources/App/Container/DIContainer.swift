@@ -84,6 +84,15 @@ public final class DIContainer: @unchecked Sendable {
         let githubParser = GitHubTreeParser(httpClient: app.http.client.shared)
         register(githubParser, for: GitHubTreeParser.self)
 
+        // Register GitHub OAuth service if configured
+        if let oauthConfig = app.githubOAuth {
+            let githubOAuthService = GitHubOAuthService(
+                httpClient: app.http.client.shared,
+                config: oauthConfig
+            )
+            register(githubOAuthService, for: GitHubOAuthService.self)
+        }
+
         // PRD-Codebase link repository (persistent Supabase implementation)
         let prdCodebaseLinkRepo = try createPRDCodebaseLinkRepository()
         register(prdCodebaseLinkRepo, for: PRDCodebaseLink.self)
@@ -124,6 +133,8 @@ public final class DIContainer: @unchecked Sendable {
         guard let supabaseKey = Environment.get("SUPABASE_SERVICE_ROLE_KEY") ?? Environment.get("SUPABASE_ANON_KEY") else {
             throw ConfigurationError.missingEnvironmentVariable("SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY")
         }
+
+        app.logger.info("🔑 Using Supabase key: \(supabaseKey.prefix(20))... (length: \(supabaseKey.count))")
 
         return SupabaseCodebaseRepository(
             httpClient: httpClient,
@@ -241,10 +252,24 @@ public final class DIContainer: @unchecked Sendable {
             throw ConfigurationError.missingDependency("Required repositories or AI provider not found")
         }
 
+        // Create embedding generator first (needed by multiple use cases)
+        let embeddingGenerator: EmbeddingGeneratorPort
+        if let openAIKey = Environment.get("OPENAI_API_KEY"), !openAIKey.isEmpty {
+            embeddingGenerator = OpenAIEmbeddingGenerator(
+                httpClient: app.http.client.shared,
+                apiKey: openAIKey
+            )
+            app.logger.info("✅ Using OpenAI for embeddings")
+        } else {
+            embeddingGenerator = PlaceholderEmbeddingGenerator()
+            app.logger.warning("⚠️ No OPENAI_API_KEY found, using placeholder embeddings")
+        }
+
         // PRD Use cases
         // Resolve optional codebase dependencies for PRD generation
         let prdCodebaseLink = resolve(PRDCodebaseLink.self)
         let githubParser = resolve(GitHubTreeParser.self)
+        let mockupUploadRepository = resolve(MockupUploadRepositoryProtocol.self)
 
         let generatePRDUseCase = GeneratePRDUseCase(
             aiProvider: aiProvider,
@@ -252,7 +277,9 @@ public final class DIContainer: @unchecked Sendable {
             documentRepository: documentRepository,
             prdCodebaseLink: prdCodebaseLink,
             codebaseRepository: codebaseRepository,
-            githubParser: githubParser
+            githubParser: githubParser,
+            embeddingGenerator: embeddingGenerator,
+            mockupUploadRepository: mockupUploadRepository
         )
         register(generatePRDUseCase, for: GeneratePRDUseCase.self)
 
@@ -262,7 +289,7 @@ public final class DIContainer: @unchecked Sendable {
         // Codebase Use cases
         let createCodebaseUseCase = CreateCodebaseUseCase(
             repository: codebaseRepository,
-            embeddingGenerator: PlaceholderEmbeddingGenerator()
+            embeddingGenerator: embeddingGenerator
         )
         register(createCodebaseUseCase, for: CreateCodebaseUseCase.self)
 
@@ -275,19 +302,6 @@ public final class DIContainer: @unchecked Sendable {
         // GitHub indexing use case
         guard let githubParser = resolve(GitHubTreeParser.self) else {
             throw ConfigurationError.missingDependency("GitHubTreeParser not found")
-        }
-
-        // Create embedding generator (OpenAI or placeholder)
-        let embeddingGenerator: EmbeddingGeneratorPort
-        if let openAIKey = Environment.get("OPENAI_API_KEY"), !openAIKey.isEmpty {
-            embeddingGenerator = OpenAIEmbeddingGenerator(
-                httpClient: app.http.client.shared,
-                apiKey: openAIKey
-            )
-            app.logger.info("✅ Using OpenAI for embeddings")
-        } else {
-            embeddingGenerator = PlaceholderEmbeddingGenerator()
-            app.logger.warning("⚠️ No OPENAI_API_KEY found, using placeholder embeddings")
         }
 
         let indexGitHubUseCase = IndexGitHubUseCase(
@@ -431,9 +445,43 @@ public final class DIContainer: @unchecked Sendable {
             addFileUseCase: addFileUseCase,
             searchCodebaseUseCase: searchCodebaseUseCase,
             linkCodebaseUseCase: linkCodebaseUseCase,
-            githubParser: githubParser
+            githubParser: githubParser,
+            defaultGitHubToken: app.githubToken.accessToken
         )
         register(codebaseController, for: CodebaseController.self)
+
+        // Register GitHub Auth controller
+        let githubOAuthService = resolve(GitHubOAuthService.self)
+        let githubAuthController = GitHubAuthController(
+            oauthService: githubOAuthService,
+            oauthConfig: app.githubOAuth,
+            tokenConfig: app.githubToken
+        )
+        register(githubAuthController, for: GitHubAuthController.self)
+
+        if githubOAuthService != nil {
+            app.logger.info("✅ GitHub Auth controller registered with OAuth")
+        } else {
+            app.logger.info("ℹ️ GitHub Auth controller registered (OAuth not configured)")
+        }
+
+        // Diagnostics controller
+        guard let prdRepository = resolve(PRDRepositoryProtocol.self),
+              let documentRepository = resolve(PRDDocumentRepositoryProtocol.self),
+              let mockupUploadRepository = resolve(MockupUploadRepositoryProtocol.self),
+              let codebaseRepository = resolve(CodebaseRepositoryProtocol.self) else {
+            app.logger.warning("Required repositories not found for DiagnosticsController")
+            return
+        }
+
+        let diagnosticsController = DiagnosticsController(
+            prdRepository: prdRepository,
+            documentRepository: documentRepository,
+            mockupUploadRepository: mockupUploadRepository,
+            codebaseRepository: codebaseRepository
+        )
+        register(diagnosticsController, for: DiagnosticsController.self)
+        app.logger.info("✅ Diagnostics controller registered")
     }
 }
 

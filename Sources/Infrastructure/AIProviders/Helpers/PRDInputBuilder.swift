@@ -3,7 +3,8 @@ import Domain
 import PRDGenerator
 
 struct PRDInputBuilder {
-    func build(from request: GeneratePRDCommand) throws -> PRDGenerator.PRDInput {
+    // Using the new ContextOptimizer for token-aware context building
+    func build(from request: GeneratePRDCommand) throws -> PRDGeneratorService.PRDInput {
         var mockupPaths: [String] = []
 
         for source in request.mockupSources {
@@ -16,14 +17,16 @@ struct PRDInputBuilder {
 
         let guidelines = buildGuidelines(from: request.options)
 
-        // ✅ Build enriched description with codebase context
-        let text = buildEnrichedDescription(
+        // ✅ Build optimized context with intelligent chunking
+        let text = ContextOptimizer.buildOptimizedContext(
             title: request.title,
             description: request.description,
-            codebaseContext: request.codebaseContext
+            codebaseContext: request.codebaseContext,
+            mockupAnalyses: request.mockupAnalyses,
+            clarifications: request.clarifications
         )
 
-        return PRDGenerator.PRDInput(
+        return PRDGeneratorService.PRDInput(
             text: text,
             mockupPaths: mockupPaths,
             guidelines: guidelines
@@ -102,79 +105,4 @@ struct PRDInputBuilder {
         return guidelines.joined(separator: "\n")
     }
 
-    /// Build enriched description with codebase context
-    private func buildEnrichedDescription(
-        title: String,
-        description: String,
-        codebaseContext: CodebaseContext?
-    ) -> String {
-        guard let context = codebaseContext else {
-            return "\(title)\n\n\(description)"
-        }
-
-        var enrichedParts: [String] = [title, "", description]
-
-        // Add codebase header
-        enrichedParts.append("""
-
-        ## Codebase Context
-
-        This PRD should be aligned with an existing codebase:
-
-        **Repository:** \(context.repositoryUrl) (branch: \(context.repositoryBranch))
-        **Project ID:** \(context.projectId)
-        **Summary:** \(context.summary)
-        """)
-
-        // Add tech stack info
-        if !context.techStack.languages.isEmpty {
-            let languagesText = context.techStack.languages
-                .sorted { $0.value > $1.value }
-                .map { "\($0.key) (\($0.value) bytes)" }
-                .joined(separator: ", ")
-
-            enrichedParts.append("""
-
-            **Tech Stack:**
-            - Languages: \(languagesText)
-            """)
-
-            if !context.techStack.frameworks.isEmpty {
-                enrichedParts.append("- Frameworks: \(context.techStack.frameworks.joined(separator: ", "))")
-            }
-
-            if !context.techStack.architecturePatterns.isEmpty {
-                enrichedParts.append("- Architecture: \(context.techStack.architecturePatterns.joined(separator: ", "))")
-            }
-        }
-
-        // Add relevant files
-        if !context.relevantFiles.isEmpty {
-            enrichedParts.append("\n**Relevant Code Files:**\n")
-
-            for file in context.relevantFiles {
-                enrichedParts.append("""
-
-                ### \(file.filePath)
-                **Purpose:** \(file.purpose)
-                \(file.language.map { "**Language:** \($0)" } ?? "")
-
-                ```\(file.language?.lowercased() ?? "")
-                \(file.excerpt)
-                ```
-                """)
-            }
-        }
-
-        enrichedParts.append("""
-
-        ---
-
-        **IMPORTANT:** The PRD should be designed to integrate with or extend the existing codebase above.
-        Consider the current architecture, tech stack, and coding patterns when proposing solutions.
-        Ensure technical requirements align with the existing technologies and frameworks.
-        """)
-
-        return enrichedParts.joined(separator: "\n")
-    }
 }

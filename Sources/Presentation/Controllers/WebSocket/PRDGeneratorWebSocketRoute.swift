@@ -114,7 +114,7 @@ public final class PRDGeneratorWebSocketRoute {
                 )
 
                 // Create PRD Generator with WebSocket support
-                let generator = PRDGenerator.createForWebSocket(
+                let generator = PRDGeneratorService.createForWebSocket(
                     provider: provider,
                     configuration: config,
                     webSocketHandler: wsHandler

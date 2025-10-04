@@ -3,9 +3,9 @@ import AsyncHTTPClient
 import Domain
 
 struct SupabaseRequestBuilder {
-    private let supabaseURL: String
-    private let apiKey: String
-    private let schema: String
+    let supabaseURL: String
+    let apiKey: String
+    let schema: String
 
     init(supabaseURL: String, apiKey: String, schema: String = "public") {
         self.supabaseURL = supabaseURL.hasSuffix("/") ? String(supabaseURL.dropLast()) : supabaseURL

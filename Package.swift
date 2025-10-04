@@ -43,7 +43,9 @@ let package = Package(
         // MARK: - Domain Layer (Core Business Logic - No Dependencies)
         .target(
             name: "Domain",
-            dependencies: []
+            dependencies: [
+                .product(name: "PRDGenerator", package: "swift")
+            ]
         ),
 
         // MARK: - Application Layer (Use Cases)
@@ -89,7 +91,8 @@ let package = Package(
                 .product(name: "CommonModels", package: "swift"),
                 .product(name: "DomainCore", package: "swift"),
                 .product(name: "AIProvidersCore", package: "swift"),
-                .product(name: "AIProviderImplementations", package: "swift")
+                .product(name: "AIProviderImplementations", package: "swift"),
+                .product(name: "ImplementationAnalysis", package: "swift")
             ]
         ),
 

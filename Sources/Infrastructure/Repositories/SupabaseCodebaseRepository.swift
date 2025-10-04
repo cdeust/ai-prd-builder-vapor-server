@@ -256,55 +256,157 @@ public final class SupabaseCodebaseRepository: CodebaseRepositoryProtocol, @unch
     }
 
     // MARK: - Code File Operations
-    // Note: These are not implemented yet as they're not needed for basic PRD generation
-    // The core functionality (project indexing and listing) works without file-level storage
 
     public func saveFiles(_ files: [CodeFile], projectId: UUID) async throws -> [CodeFile] {
-        throw RepositoryError.notImplemented("File storage not implemented - files are fetched from GitHub on-demand")
+        logger.info("Saving \(files.count) files for project: \(projectId)")
+
+        guard !files.isEmpty else { return [] }
+
+        let dtos = files.map { CodeFileDTO.fromDomain($0, projectId: projectId) }
+        let request = try requestBuilder.buildInsertRequest(tableName: "code_files", model: dtos)
+        let results: [CodeFileDTO] = try await httpClient.execute(request)
+
+        logger.info("Successfully saved \(results.count) files")
+        return results.map { $0.toDomain() }
     }
 
     public func addFile(_ file: CodeFile) async throws -> CodeFile {
-        throw RepositoryError.notImplemented("File storage not implemented - files are fetched from GitHub on-demand")
+        logger.info("Adding file: \(file.filePath)")
+
+        let dto = CodeFileDTO.fromDomain(file, projectId: file.codebaseProjectId)
+        let request = try requestBuilder.buildInsertRequest(tableName: "code_files", model: dto)
+        let results: [CodeFileDTO] = try await httpClient.execute(request)
+
+        guard let savedDTO = results.first else {
+            throw RepositoryError.saveFailed("Failed to add file")
+        }
+
+        logger.info("Successfully added file: \(savedDTO.id)")
+        return savedDTO.toDomain()
     }
 
     public func findFilesByProject(_ projectId: UUID) async throws -> [CodeFile] {
-        // Not stored in DB - fetch from GitHub on-demand
-        return []
+        logger.info("Finding files for project: \(projectId)")
+
+        let request = requestBuilder.buildFindByFieldRequest(
+            tableName: "code_files",
+            field: "project_id",
+            value: projectId.uuidString,
+            comparison: "eq",
+            limit: 10000
+        )
+        let results: [CodeFileDTO] = try await httpClient.execute(request)
+
+        return results.map { $0.toDomain() }
     }
 
     public func findFile(projectId: UUID, path: String) async throws -> CodeFile? {
-        // Not stored in DB - fetch from GitHub on-demand
-        return nil
+        logger.info("Finding file at path: \(path) in project: \(projectId)")
+
+        let filters: [(field: String, value: String, comparison: String)] = [
+            ("project_id", projectId.uuidString, "eq"),
+            ("path", path, "eq")
+        ]
+        let request = requestBuilder.buildFindByMultipleFieldsRequest(
+            tableName: "code_files",
+            filters: filters,
+            limit: 1
+        )
+        let results: [CodeFileDTO] = try await httpClient.execute(request)
+
+        return results.first?.toDomain()
     }
 
     public func updateFileParsed(fileId: UUID, isParsed: Bool, error: String?) async throws {
-        throw RepositoryError.notImplemented("File parsing tracking not implemented")
+        logger.info("Updating file parsed status: \(fileId)")
+
+        struct FileParseUpdate: Codable {
+            let is_parsed: Bool
+            let parse_error: String?
+        }
+
+        let updateModel = FileParseUpdate(is_parsed: isParsed, parse_error: error)
+        let request = try requestBuilder.buildUpdateRequest(
+            tableName: "code_files",
+            id: fileId,
+            model: updateModel
+        )
+        let _: [CodeFileDTO] = try await httpClient.execute(request)
+
+        logger.info("Successfully updated file parsed status")
     }
 
     // MARK: - Code Chunk Operations
-    // Note: Chunking/embeddings are future features for semantic search
 
     public func saveChunks(_ chunks: [CodeChunk], projectId: UUID) async throws -> [CodeChunk] {
-        throw RepositoryError.notImplemented("Code chunking not implemented yet")
+        logger.info("Saving \(chunks.count) chunks for project: \(projectId)")
+
+        guard !chunks.isEmpty else { return [] }
+
+        let dtos = chunks.map { CodeChunkDTO.fromDomain($0) }
+        let request = try requestBuilder.buildInsertRequest(tableName: "code_chunks", model: dtos)
+        let results: [CodeChunkDTO] = try await httpClient.execute(request)
+
+        logger.info("Successfully saved \(results.count) chunks")
+        return results.map { $0.toDomain() }
     }
 
     public func findChunksByProject(_ projectId: UUID, limit: Int, offset: Int) async throws -> [CodeChunk] {
-        return []
+        logger.info("Finding chunks for project: \(projectId) (limit: \(limit), offset: \(offset))")
+
+        let request = requestBuilder.buildFindByFieldRequest(
+            tableName: "code_chunks",
+            field: "project_id",
+            value: projectId.uuidString,
+            comparison: "eq",
+            limit: limit,
+            offset: offset
+        )
+        let results: [CodeChunkDTO] = try await httpClient.execute(request)
+
+        return results.map { $0.toDomain() }
     }
 
     public func findChunksByFile(_ fileId: UUID) async throws -> [CodeChunk] {
-        return []
+        logger.info("Finding chunks for file: \(fileId)")
+
+        let request = requestBuilder.buildFindByFieldRequest(
+            tableName: "code_chunks",
+            field: "file_id",
+            value: fileId.uuidString,
+            comparison: "eq",
+            limit: 1000
+        )
+        let results: [CodeChunkDTO] = try await httpClient.execute(request)
+
+        return results.map { $0.toDomain() }
     }
 
     public func deleteChunksByProject(_ projectId: UUID) async throws {
-        // No-op - chunks not stored
+        logger.info("Deleting chunks for project: \(projectId)")
+
+        let request = requestBuilder.buildDeleteByFieldRequest(
+            tableName: "code_chunks",
+            field: "project_id",
+            value: projectId.uuidString
+        )
+        try await httpClient.executeDelete(request)
+
+        logger.info("Successfully deleted chunks for project")
     }
 
     // MARK: - Code Embedding Operations
-    // Note: Vector search requires pgvector extension in Supabase
 
     public func saveEmbeddings(_ embeddings: [CodeEmbedding], projectId: UUID) async throws {
-        throw RepositoryError.notImplemented("Embedding storage requires pgvector setup")
+        logger.info("Saving \(embeddings.count) embeddings for project: \(projectId)")
+
+        guard !embeddings.isEmpty else { return }
+
+        let dtos = embeddings.map { CodeEmbeddingDTO.fromDomain($0) }
+        let request = try requestBuilder.buildInsertRequest(tableName: "code_embeddings", model: dtos)
+        _ = try await httpClient.execute(request) as [CodeEmbeddingDTO]
+
+        logger.info("Successfully saved \(embeddings.count) embeddings")
     }
 
     public func findSimilarChunks(
@@ -313,7 +415,33 @@ public final class SupabaseCodebaseRepository: CodebaseRepositoryProtocol, @unch
         limit: Int,
         similarityThreshold: Float
     ) async throws -> [SimilarCodeChunk] {
-        return []
+        logger.info("Finding similar chunks for project: \(projectId) (threshold: \(similarityThreshold))")
+
+        // Use Supabase's RPC function for vector similarity search
+        // This requires pgvector extension and a custom function in Supabase
+        let rpcRequest = VectorSearchRequest(
+            projectId: projectId,
+            queryEmbedding: queryEmbedding,
+            limit: limit,
+            similarityThreshold: similarityThreshold
+        )
+
+        let encoder = JSONEncoder()
+        let requestData = try encoder.encode(rpcRequest)
+
+        var request = HTTPClientRequest(url: "\(requestBuilder.supabaseURL)/rest/v1/rpc/find_similar_code_chunks")
+        request.method = .POST
+        request.headers.add(name: "Authorization", value: "Bearer \(requestBuilder.apiKey)")
+        request.headers.add(name: "apikey", value: requestBuilder.apiKey)
+        request.headers.add(name: "Content-Type", value: "application/json")
+        request.headers.add(name: "Content-Profile", value: requestBuilder.schema)
+        request.headers.add(name: "Accept-Profile", value: requestBuilder.schema)
+        request.body = .bytes(requestData)
+
+        let results: [SimilarChunkDTO] = try await httpClient.execute(request)
+
+        logger.info("Found \(results.count) similar chunks")
+        return results.map { $0.toDomain() }
     }
 
     public func searchFiles(
@@ -322,7 +450,32 @@ public final class SupabaseCodebaseRepository: CodebaseRepositoryProtocol, @unch
         limit: Int,
         similarityThreshold: Float?
     ) async throws -> [(file: CodeFile, similarity: Float)] {
-        return []
+        logger.info("Searching files in codebase: \(codebaseId)")
+
+        // Use RPC function for file-level semantic search
+        let rpcRequest = FileSearchRequest(
+            codebaseId: codebaseId,
+            queryEmbedding: embedding,
+            limit: limit,
+            similarityThreshold: similarityThreshold ?? 0.7
+        )
+
+        let encoder = JSONEncoder()
+        let requestData = try encoder.encode(rpcRequest)
+
+        var request = HTTPClientRequest(url: "\(requestBuilder.supabaseURL)/rest/v1/rpc/search_code_files")
+        request.method = .POST
+        request.headers.add(name: "Authorization", value: "Bearer \(requestBuilder.apiKey)")
+        request.headers.add(name: "apikey", value: requestBuilder.apiKey)
+        request.headers.add(name: "Content-Type", value: "application/json")
+        request.headers.add(name: "Content-Profile", value: requestBuilder.schema)
+        request.headers.add(name: "Accept-Profile", value: requestBuilder.schema)
+        request.body = .bytes(requestData)
+
+        let results: [FileSearchResultDTO] = try await httpClient.execute(request)
+
+        logger.info("Found \(results.count) matching files")
+        return results.map { (file: $0.file.toDomain(), similarity: $0.similarity) }
     }
 
     // MARK: - Merkle Tree Operations

@@ -229,10 +229,10 @@ extension CodeFileDTO {
     }
 
     /// Convert domain model to DTO
-    static func fromDomain(_ file: CodeFile) -> CodeFileDTO {
+    static func fromDomain(_ file: CodeFile, projectId: UUID) -> CodeFileDTO {
         return CodeFileDTO(
             id: file.id,
-            codebase_project_id: file.codebaseProjectId,
+            codebase_project_id: projectId,
             file_path: file.filePath,
             file_hash: file.fileHash,
             file_size: file.fileSize,
@@ -243,4 +243,171 @@ extension CodeFileDTO {
             updated_at: file.updatedAt
         )
     }
+}
+
+// MARK: - Code Chunk DTOs
+
+struct CodeChunkDTO: Codable {
+    let id: UUID
+    let codebase_project_id: UUID
+    let file_id: UUID
+    let file_path: String
+    let start_line: Int
+    let end_line: Int
+    let content: String
+    let content_hash: String
+    let chunk_type: String
+    let language: String
+    let symbols: [String]
+    let imports: [String]
+    let token_count: Int
+    let created_at: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case codebase_project_id
+        case file_id
+        case file_path
+        case start_line
+        case end_line
+        case content
+        case content_hash
+        case chunk_type
+        case language
+        case symbols
+        case imports
+        case token_count
+        case created_at
+    }
+
+    func toDomain() -> CodeChunk {
+        return CodeChunk(
+            id: id,
+            codebaseProjectId: codebase_project_id,
+            fileId: file_id,
+            filePath: file_path,
+            startLine: start_line,
+            endLine: end_line,
+            content: content,
+            contentHash: content_hash,
+            chunkType: ChunkType(rawValue: chunk_type) ?? .other,
+            language: ProgrammingLanguage(rawValue: language) ?? .swift,
+            symbols: symbols,
+            imports: imports,
+            tokenCount: token_count,
+            createdAt: created_at
+        )
+    }
+
+    static func fromDomain(_ chunk: CodeChunk) -> CodeChunkDTO {
+        return CodeChunkDTO(
+            id: chunk.id,
+            codebase_project_id: chunk.codebaseProjectId,
+            file_id: chunk.fileId,
+            file_path: chunk.filePath,
+            start_line: chunk.startLine,
+            end_line: chunk.endLine,
+            content: chunk.content,
+            content_hash: chunk.contentHash,
+            chunk_type: chunk.chunkType.rawValue,
+            language: chunk.language.rawValue,
+            symbols: chunk.symbols,
+            imports: chunk.imports,
+            token_count: chunk.tokenCount,
+            created_at: chunk.createdAt
+        )
+    }
+}
+
+// MARK: - Code Embedding DTOs
+
+struct CodeEmbeddingDTO: Codable {
+    let id: UUID
+    let chunk_id: UUID
+    let codebase_project_id: UUID
+    let embedding: [Float]
+    let model: String
+    let embedding_version: Int
+    let created_at: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case chunk_id
+        case codebase_project_id
+        case embedding
+        case model
+        case embedding_version
+        case created_at
+    }
+
+    func toDomain() -> CodeEmbedding {
+        return CodeEmbedding(
+            id: id,
+            chunkId: chunk_id,
+            codebaseProjectId: codebase_project_id,
+            embedding: embedding,
+            model: model,
+            embeddingVersion: embedding_version,
+            createdAt: created_at
+        )
+    }
+
+    static func fromDomain(_ embedding: CodeEmbedding) -> CodeEmbeddingDTO {
+        return CodeEmbeddingDTO(
+            id: embedding.id,
+            chunk_id: embedding.chunkId,
+            codebase_project_id: embedding.codebaseProjectId,
+            embedding: embedding.embedding,
+            model: embedding.model,
+            embedding_version: embedding.embeddingVersion,
+            created_at: embedding.createdAt
+        )
+    }
+}
+
+// MARK: - Vector Search Request/Response DTOs
+
+struct VectorSearchRequest: Codable {
+    let projectId: UUID
+    let queryEmbedding: [Float]
+    let limit: Int
+    let similarityThreshold: Float
+
+    enum CodingKeys: String, CodingKey {
+        case projectId = "project_id"
+        case queryEmbedding = "query_embedding"
+        case limit
+        case similarityThreshold = "similarity_threshold"
+    }
+}
+
+struct SimilarChunkDTO: Codable {
+    let chunk: CodeChunkDTO
+    let similarity: Double
+
+    func toDomain() -> SimilarCodeChunk {
+        return SimilarCodeChunk(
+            chunk: chunk.toDomain(),
+            similarity: similarity
+        )
+    }
+}
+
+struct FileSearchRequest: Codable {
+    let codebaseId: UUID
+    let queryEmbedding: [Float]
+    let limit: Int
+    let similarityThreshold: Float
+
+    enum CodingKeys: String, CodingKey {
+        case codebaseId = "codebase_id"
+        case queryEmbedding = "query_embedding"
+        case limit
+        case similarityThreshold = "similarity_threshold"
+    }
+}
+
+struct FileSearchResultDTO: Codable {
+    let file: CodeFileDTO
+    let similarity: Float
 }

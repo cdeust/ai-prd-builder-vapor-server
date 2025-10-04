@@ -1,5 +1,6 @@
 import Foundation
 import Domain
+import PRDGenerator
 import ImplementationAnalysis
 
 /// Core business logic for PRD generation - Application layer use case
@@ -11,6 +12,9 @@ public final class GeneratePRDUseCase {
     private let prdCodebaseLink: PRDCodebaseLink?
     private let codebaseRepository: CodebaseRepositoryProtocol?
     private let githubParser: GitHubParserPort?
+    private let embeddingGenerator: EmbeddingGeneratorPort?
+    private let mockupUploadRepository: MockupUploadRepositoryProtocol?
+    private let contextRequestPort: ContextRequestPort?
 
     public init(
         aiProvider: AIProviderPort,
@@ -18,7 +22,10 @@ public final class GeneratePRDUseCase {
         documentRepository: PRDDocumentRepositoryProtocol,
         prdCodebaseLink: PRDCodebaseLink? = nil,
         codebaseRepository: CodebaseRepositoryProtocol? = nil,
-        githubParser: GitHubParserPort? = nil
+        githubParser: GitHubParserPort? = nil,
+        embeddingGenerator: EmbeddingGeneratorPort? = nil,
+        mockupUploadRepository: MockupUploadRepositoryProtocol? = nil,
+        contextRequestPort: ContextRequestPort? = nil
     ) {
         self.aiProvider = aiProvider
         self.prdRepository = prdRepository
@@ -26,6 +33,9 @@ public final class GeneratePRDUseCase {
         self.prdCodebaseLink = prdCodebaseLink
         self.codebaseRepository = codebaseRepository
         self.githubParser = githubParser
+        self.embeddingGenerator = embeddingGenerator
+        self.mockupUploadRepository = mockupUploadRepository
+        self.contextRequestPort = contextRequestPort
     }
 
     /// Execute PRD generation workflow
@@ -38,7 +48,18 @@ public final class GeneratePRDUseCase {
         savedRequest = savedRequest.withStatus(.processing)
         savedRequest = try await prdRepository.update(savedRequest)
 
-        // 1.5. Fetch linked codebase context if available
+        // 1.5. Fetch mockup analyses if available
+        var mockupAnalyses: [Domain.MockupAnalysisResult]? = nil
+        if let mockupRepo = mockupUploadRepository {
+            let mockupUploads = try await mockupRepo.findByRequestId(command.requestId)
+            mockupAnalyses = mockupUploads.compactMap { $0.analysisResult }
+
+            if let analyses = mockupAnalyses, !analyses.isEmpty {
+                print("✅ Found \(analyses.count) mockup analyses for PRD generation")
+            }
+        }
+
+        // 1.6. Fetch linked codebase context if available
         var enrichedCommand = command
         if let prdCodebaseLink = prdCodebaseLink,
            let linkedCodebase = try await prdCodebaseLink.getCodebaseForPRD(prdRequestId: command.requestId),
@@ -47,16 +68,18 @@ public final class GeneratePRDUseCase {
 
             print("✅ Found linked codebase: \(linkedCodebase.id) - \(linkedCodebase.repositoryUrl)")
 
-            // Build codebase context
+            // Build codebase context with PRD details for RAG search
             let codebaseContext = try await buildCodebaseContext(
                 codebaseProject: linkedCodebase,
                 codebaseRepository: codebaseRepository,
-                githubParser: githubParser
+                githubParser: githubParser,
+                prdTitle: command.title,
+                prdDescription: command.description
             )
 
             print("✅ Built codebase context with \(codebaseContext.relevantFiles.count) files and \(codebaseContext.techStack.languages.count) languages")
 
-            // Create enriched command with codebase context
+            // Create enriched command with codebase context and mockup analyses
             enrichedCommand = GeneratePRDCommand(
                 requestId: command.requestId,
                 title: command.title,
@@ -66,14 +89,30 @@ public final class GeneratePRDUseCase {
                 requester: command.requester,
                 preferredProvider: command.preferredProvider,
                 options: command.options,
-                codebaseContext: codebaseContext
+                codebaseContext: codebaseContext,
+                mockupAnalyses: mockupAnalyses,
+                clarifications: command.clarifications
             )
         } else {
+            // No codebase, but still include mockup analyses if available
+            enrichedCommand = GeneratePRDCommand(
+                requestId: command.requestId,
+                title: command.title,
+                description: command.description,
+                mockupSources: command.mockupSources,
+                priority: command.priority,
+                requester: command.requester,
+                preferredProvider: command.preferredProvider,
+                options: command.options,
+                codebaseContext: nil,
+                mockupAnalyses: mockupAnalyses,
+                clarifications: command.clarifications
+            )
             print("⚠️ No codebase linked to PRD request: \(command.requestId)")
         }
 
-        // 2. Generate PRD content using AI provider (with enriched command if codebase linked)
-        let result = try await aiProvider.generatePRD(from: enrichedCommand)
+        // 2. Generate PRD content using AI provider (with enriched command and context port)
+        let result = try await aiProvider.generatePRD(from: enrichedCommand, contextRequestPort: contextRequestPort)
 
         // 3. Create PRD document
         let document = PRDDocument(
@@ -171,10 +210,13 @@ public final class GeneratePRDUseCase {
     }
 
     /// Build codebase context from a linked codebase project
+    /// Uses RAG (Retrieval-Augmented Generation) if embeddings are available, falls back to file parsing
     private func buildCodebaseContext(
         codebaseProject: CodebaseProject,
         codebaseRepository: CodebaseRepositoryProtocol,
-        githubParser: GitHubParserPort
+        githubParser: GitHubParserPort,
+        prdTitle: String,
+        prdDescription: String
     ) async throws -> CodebaseContext {
         // Parse GitHub URL to extract owner and repo
         guard let repoURL = GitHubURL.parse(codebaseProject.repositoryUrl) else {
@@ -198,40 +240,78 @@ public final class GeneratePRDUseCase {
         // Build tech stack info (AI will infer frameworks/patterns from files)
         let techStack = TechStackInfo(
             languages: languages,
-            frameworks: [],
-            architecturePatterns: []
+            frameworks: codebaseProject.detectedFrameworks,
+            architecturePatterns: codebaseProject.architecturePatterns.map { $0.name }
         )
 
-        // Fetch repository file tree to find actual files
-        let fileTree = try await githubParser.fetchFileTree(
-            owner: repoURL.owner,
-            repo: repoURL.repo,
-            branch: codebaseProject.repositoryBranch,
-            accessToken: nil
-        )
+        var relevantFiles: [Domain.CodeFileContext] = []
 
-        // Select relevant files based on what actually exists
-        let relevantFilePaths = selectRelevantFiles(from: fileTree)
+        // Check if codebase has been indexed (has embeddings) and we have embedding generator
+        if codebaseProject.indexingStatus == .completed && codebaseProject.totalChunks > 0,
+           let embeddingGenerator = embeddingGenerator {
+            print("✅ Using RAG semantic search for codebase context (indexed with \(codebaseProject.totalChunks) chunks)")
 
-        // Fetch file contents
-        let fileContents = try await githubParser.batchFetchFileContents(
-            owner: repoURL.owner,
-            repo: repoURL.repo,
-            paths: relevantFilePaths,
-            ref: codebaseProject.repositoryBranch,
-            accessToken: nil
-        )
-
-        // Build file contexts from actual files
-        let relevantFiles = fileContents.map { (path, content) -> CodeFileContext in
-            let excerpt = createExcerpt(from: content, maxLength: 500)
-
-            return CodeFileContext(
-                filePath: path,
-                language: nil, // Let AI infer
-                excerpt: excerpt,
-                purpose: "" // Let AI infer from content
+            // Use RAG to find most relevant code chunks based on PRD description
+            let ragUseCase = BuildRAGContextUseCase(
+                codebaseRepository: codebaseRepository,
+                embeddingGenerator: embeddingGenerator
             )
+
+            let ragInput = BuildRAGContextUseCase.Input(
+                projectId: codebaseProject.id,
+                prdDescription: prdDescription,
+                prdTitle: prdTitle,
+                maxChunks: 10,
+                similarityThreshold: 0.7
+            )
+
+            let ragOutput = try await ragUseCase.execute(ragInput)
+
+            // Convert RAG output to CodeFileContext
+            relevantFiles = ragOutput.relevantChunks.map { chunk in
+                Domain.CodeFileContext(
+                    filePath: chunk.filePath,
+                    language: chunk.language,
+                    excerpt: chunk.content,
+                    purpose: "Code reference: \(chunk.chunkType)\(chunk.symbolName.map { " '\($0)'" } ?? "") (similarity: \(String(format: "%.2f", chunk.similarity)))"
+                )
+            }
+
+            print("✅ Found \(relevantFiles.count) relevant code chunks with average similarity: \(String(format: "%.2f", ragOutput.averageSimilarity))")
+        } else {
+            print("⚠️ Codebase not indexed yet, falling back to GitHub file parsing")
+
+            // Fetch repository file tree to find actual files
+            let fileTree = try await githubParser.fetchFileTree(
+                owner: repoURL.owner,
+                repo: repoURL.repo,
+                branch: codebaseProject.repositoryBranch,
+                accessToken: nil
+            )
+
+            // Select relevant files based on what actually exists
+            let relevantFilePaths = selectRelevantFiles(from: fileTree)
+
+            // Fetch file contents
+            let fileContents = try await githubParser.batchFetchFileContents(
+                owner: repoURL.owner,
+                repo: repoURL.repo,
+                paths: relevantFilePaths,
+                ref: codebaseProject.repositoryBranch,
+                accessToken: nil
+            )
+
+            // Build file contexts from actual files
+            relevantFiles = fileContents.map { (path, content) -> Domain.CodeFileContext in
+                let excerpt = createExcerpt(from: content, maxLength: 500)
+
+                return Domain.CodeFileContext(
+                    filePath: path,
+                    language: nil, // Let AI infer
+                    excerpt: excerpt,
+                    purpose: "" // Let AI infer from content
+                )
+            }
         }
 
         return CodebaseContext(

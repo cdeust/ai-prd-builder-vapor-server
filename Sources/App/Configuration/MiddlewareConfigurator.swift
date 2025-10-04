@@ -16,6 +16,7 @@ public final class MiddlewareConfigurator {
         configureLogging()
         configureTimeout()
         configureFileServing()
+        configureSessions()
     }
 
     // MARK: - Private Methods
@@ -50,5 +51,10 @@ public final class MiddlewareConfigurator {
     private func configureFileServing() {
         // Serve static documentation files
         app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
+    }
+
+    private func configureSessions() {
+        // Sessions middleware must be added after CORS but before routes
+        app.middleware.use(app.sessions.middleware)
     }
 }

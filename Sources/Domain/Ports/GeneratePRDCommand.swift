@@ -1,5 +1,16 @@
 import Foundation
 
+/// User clarification Q&A pair
+public struct Clarification: Sendable, Codable, Equatable {
+    public let question: String
+    public let answer: String
+
+    public init(question: String, answer: String) {
+        self.question = question
+        self.answer = answer
+    }
+}
+
 public struct GeneratePRDCommand: Sendable, Codable {
     public let requestId: UUID
     public let title: String
@@ -10,6 +21,8 @@ public struct GeneratePRDCommand: Sendable, Codable {
     public let preferredProvider: String?
     public let options: GenerationOptions
     public let codebaseContext: CodebaseContext?
+    public let mockupAnalyses: [MockupAnalysisResult]?
+    public let clarifications: [Clarification]?
 
     public init(
         requestId: UUID = UUID(),
@@ -20,7 +33,9 @@ public struct GeneratePRDCommand: Sendable, Codable {
         requester: RequesterInfo? = nil,
         preferredProvider: String? = nil,
         options: GenerationOptions = GenerationOptions(),
-        codebaseContext: CodebaseContext? = nil
+        codebaseContext: CodebaseContext? = nil,
+        mockupAnalyses: [MockupAnalysisResult]? = nil,
+        clarifications: [Clarification]? = nil
     ) {
         self.requestId = requestId
         self.title = title
@@ -31,6 +46,8 @@ public struct GeneratePRDCommand: Sendable, Codable {
         self.preferredProvider = preferredProvider
         self.options = options
         self.codebaseContext = codebaseContext
+        self.mockupAnalyses = mockupAnalyses
+        self.clarifications = clarifications
     }
 }
 
